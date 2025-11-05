@@ -41,11 +41,18 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 ## Installation
 
 ### From Jellyfin Plugin Catalog (Recommended)
-1. Open Jellyfin Admin Dashboard
-2. Navigate to **Plugins** → **Catalog**
-3. Search for "HoverTrailer"
-4. Click **Install**
-5. Restart Jellyfin server
+1. Open **Jellyfin Admin Dashboard**
+2. Navigate to **Plugins** → **Manage Repositories**
+3. Click **+ (Add)** to add a new repository
+4. Enter the **Manifest URL**:
+   ```
+   https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
+   ```
+5. Click **Save**
+6. Navigate back to **Plugins**
+7. Search for **"HoverTrailer"**
+8. Click **Install**
+9. **Restart Jellyfin server** to activate the plugin
 
 ### Manual Installation
 1. Download the latest release from [GitHub Releases](../../releases)
