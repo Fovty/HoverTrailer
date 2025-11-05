@@ -195,6 +195,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 return false;
             }
 
+
             // Get the RegisterTransformation method
             MethodInfo? registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation");
             if (registerMethod == null)
