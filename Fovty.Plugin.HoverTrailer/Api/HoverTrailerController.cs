@@ -156,10 +156,24 @@ public class HoverTrailerController : ControllerBase
 
             TrailerInfo? trailerInfo = null;
 
-            // Step 1: Check for local trailers using Jellyfin's GetExtras
+            // Step 1: Check for local trailers using the same approach as Jellyfin's native implementation
             LoggingHelper.LogDebug(_logger, "Step 1: Checking for local trailers...");
-            var localTrailers = movie.GetExtras(new[] { ExtraType.Trailer });
-            LoggingHelper.LogDebug(_logger, "Found {LocalTrailerCount} local trailers for movie: {MovieName}", localTrailers.Count(), movie.Name);
+
+            IEnumerable<BaseItem> localTrailers;
+            if (movie is IHasTrailers hasTrailers)
+            {
+                // Use LocalTrailers property which matches Jellyfin's native trailer selection
+                localTrailers = hasTrailers.LocalTrailers;
+                LoggingHelper.LogDebug(_logger, "Using LocalTrailers property: Found {LocalTrailerCount} local trailers for movie: {MovieName}",
+                    localTrailers.Count(), movie.Name);
+            }
+            else
+            {
+                // Fallback to GetExtras if movie doesn't implement IHasTrailers
+                localTrailers = movie.GetExtras(new[] { ExtraType.Trailer });
+                LoggingHelper.LogDebug(_logger, "Using GetExtras fallback: Found {LocalTrailerCount} local trailers for movie: {MovieName}",
+                    localTrailers.Count(), movie.Name);
+            }
 
             // Log detailed information about each local trailer found
             var localTrailerList = localTrailers.ToList();
@@ -170,7 +184,7 @@ public class HoverTrailerController : ControllerBase
                     i + 1, t.Id, t.Name, t.Path);
             }
 
-            var localTrailer = localTrailers.FirstOrDefault();
+            var localTrailer = localTrailerList.FirstOrDefault();
 
             if (localTrailer != null)
             {
@@ -200,10 +214,8 @@ public class HoverTrailerController : ControllerBase
 
             if (movie.RemoteTrailers?.Any() == true)
             {
-                var remoteTrailer = movie.RemoteTrailers.First();
+                var remoteTrailer = movie.RemoteTrailers.LastOrDefault();
                 LoggingHelper.LogDebug(_logger, "Found remote trailer for movie: {MovieName} (ID: {MovieId})", movie.Name, movieId);
-                LoggingHelper.LogDebug(_logger, "Remote trailer details - URL: {TrailerUrl}, Name: {TrailerName}",
-                    remoteTrailer.Url, remoteTrailer.Name);
 
                 trailerInfo = new TrailerInfo
                 {
@@ -414,6 +426,8 @@ public class HoverTrailerController : ControllerBase
     const PREVIEW_SIZING_MODE = '{config.PreviewSizingMode}';
     const PREVIEW_SIZE_PERCENTAGE = {config.PreviewSizePercentage};
     const ENABLE_PREVIEW_AUDIO = {config.EnablePreviewAudio.ToString().ToLower()};
+    const PREVIEW_VOLUME = {config.PreviewVolume};
+    const REMOTE_VIDEO_QUALITY = '{config.RemoteVideoQuality}';
     const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
 
     let hoverTimeout;
@@ -476,6 +490,162 @@ public class HoverTrailerController : ControllerBase
             }}, 300);
             log('Background blur removed');
         }}
+    }}
+
+    function extractYouTubeVideoId(url) {{
+        // Extract video ID from various YouTube URL formats
+        const patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\?]+)/,
+            /youtube\.com\/embed\/([^&\?]+)/,
+            /youtube\.com\/v\/([^&\?]+)/
+        ];
+        
+        for (const pattern of patterns) {{
+            const match = url.match(pattern);
+            if (match && match[1]) {{
+                log('Extracted YouTube video ID:', match[1]);
+                return match[1];
+            }}
+        }}
+        
+        log('Failed to extract video ID from URL:', url);
+        return null;
+    }}
+
+    function createYouTubePreview(embedUrl, cardElement) {{
+        // Create container div for the YouTube iframe
+        const container = document.createElement('div');
+        const iframe = document.createElement('iframe');
+
+        // Get card position relative to viewport (needed for custom positioning)
+        const cardRect = cardElement.getBoundingClientRect();
+        const cardCenterX = cardRect.left + cardRect.width / 2;
+        const cardCenterY = cardRect.top + cardRect.height / 2;
+
+        // Calculate container size based on sizing mode
+        let containerWidth, containerHeight;
+        if (PREVIEW_SIZING_MODE === 'FitContent') {{
+            // For fit content mode with YouTube (16:9 aspect ratio)
+            // Apply the same logic as local videos
+            const youtubeAspectRatio = 16 / 9;  // YouTube standard aspect ratio
+            const cardAspectRatio = cardRect.width / cardRect.height;
+            
+            if (youtubeAspectRatio > cardAspectRatio) {{
+                // Video is wider than card, fit to width
+                containerWidth = cardRect.width;
+                containerHeight = Math.round(cardRect.width / youtubeAspectRatio);
+            }} else {{
+                // Video is taller than card, fit to height
+                containerHeight = cardRect.height;
+                containerWidth = Math.round(cardRect.height * youtubeAspectRatio);
+            }}
+            
+            // Apply percentage scaling
+            containerWidth = Math.round(containerWidth * (PREVIEW_SIZE_PERCENTAGE / 100));
+            containerHeight = Math.round(containerHeight * (PREVIEW_SIZE_PERCENTAGE / 100));
+            
+            log(`YouTube FitContent dimensions: ${{containerWidth}}x${{containerHeight}} (${{PREVIEW_SIZE_PERCENTAGE}}% of calculated fit)`);
+        }} else {{
+            // Manual mode uses configured width/height
+            containerWidth = PREVIEW_WIDTH;
+            containerHeight = PREVIEW_HEIGHT;
+        }}
+
+        // Calculate positioning based on positioning mode
+        let containerStyles;
+        if (PREVIEW_POSITIONING_MODE === 'Center') {{
+            containerStyles = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: ${{containerWidth}}px;
+                height: ${{containerHeight}}px;
+                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                z-index: 10000;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
+        }} else {{
+            containerStyles = `
+                position: fixed;
+                top: calc(${{cardCenterY}}px + ${{PREVIEW_OFFSET_Y}}px);
+                left: calc(${{cardCenterX}}px + ${{PREVIEW_OFFSET_X}}px);
+                transform: translate(-50%, -50%);
+                width: ${{containerWidth}}px;
+                height: ${{containerHeight}}px;
+                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                z-index: 10000;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
+        }}
+
+        container.style.cssText = containerStyles;
+
+        // Configure iframe for YouTube with proper attributes to prevent Error 153
+        // Use object-fit: cover to maintain aspect ratio while filling the container
+        iframe.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            border: none;
+            object-fit: cover;
+        `;
+        iframe.src = embedUrl;
+        iframe.id = 'youtube-preview-' + Date.now(); // Unique ID for IFrame API
+        // Critical attributes to prevent YouTube Error 153
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.setAttribute('allowfullscreen', '');
+        iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+        iframe.setAttribute('frameborder', '0');
+
+        container.appendChild(iframe);
+        log('Created YouTube preview iframe with URL:', embedUrl);
+
+        // Set up YouTube IFrame API for volume and quality control
+        // Since video starts muted, immediately unmute and set volume when ready
+        iframe.addEventListener('load', () => {{
+            // Use shorter delay since we're just setting volume and quality, not waiting for autoplay
+            setTimeout(() => {{
+                try {{
+                    const volumePercent = ENABLE_PREVIEW_AUDIO ? PREVIEW_VOLUME : 0;
+                    
+                    // Set playback quality using IFrame API (2025 method)
+                    if (REMOTE_VIDEO_QUALITY !== 'adaptive') {{
+                        iframe.contentWindow.postMessage(JSON.stringify({{
+                            event: 'command',
+                            func: 'setPlaybackQuality',
+                            args: [REMOTE_VIDEO_QUALITY]
+                        }}), '*');
+                        log('YouTube quality set to: ' + REMOTE_VIDEO_QUALITY);
+                    }}
+                    
+                    if (volumePercent === 0) {{
+                        // Keep muted if volume is 0 or audio is disabled
+                        log('YouTube iframe kept muted (volume=0 or audio disabled)');
+                    }} else {{
+                        // Unmute and set volume immediately
+                        iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'unMute',args:''}}), '*');
+                        iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'setVolume',args:[volumePercent]}}), '*');
+                        log('YouTube iframe unmuted and volume set to ' + volumePercent + '%');
+                    }}
+                }} catch (e) {{
+                    log('Error setting YouTube volume/quality:', e);
+                }}
+            }}, 100); // Minimal delay for API readiness
+        }});
+
+        return container;
     }}
 
     function createVideoPreview(trailerPath, cardElement) {{
@@ -552,6 +722,11 @@ public class HoverTrailerController : ControllerBase
         video.muted = !ENABLE_PREVIEW_AUDIO;
         video.loop = true;
         video.preload = 'metadata';
+        
+        // Set volume based on configuration (0-100 range converted to 0.0-1.0)
+        if (ENABLE_PREVIEW_AUDIO) {{
+            video.volume = PREVIEW_VOLUME / 100.0;
+        }}
 
         // Append video to container
         container.appendChild(video);
@@ -578,10 +753,58 @@ public class HoverTrailerController : ControllerBase
                     log('Preview cancelled during fetch - another preview is active');
                     return;
                 }}
-                
+
                 log('Creating video preview for trailer:', trailerInfo.Name);
-                const container = createVideoPreview(`${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`, element);
-                const video = container.querySelector('video');
+                log('Trailer info received:', {{
+                    id: trailerInfo.Id,
+                    name: trailerInfo.Name,
+                    path: trailerInfo.Path,
+                    isRemote: trailerInfo.IsRemote,
+                    trailerType: trailerInfo.TrailerType,
+                    source: trailerInfo.Source
+                }});
+
+                // Determine video source based on trailer type
+                let videoSource;
+                if (trailerInfo.IsRemote) {{
+                    // For remote YouTube trailers, convert to embed URL
+                    const youtubeUrl = trailerInfo.Path;
+                    log('Original YouTube URL:', youtubeUrl);
+                    
+                    // Extract video ID from YouTube URL
+                    const videoId = extractYouTubeVideoId(youtubeUrl);
+                    if (videoId) {{
+                        // Use youtube-nocookie.com to avoid Error 153 and privacy issues
+                        // Enable JS API for volume control and quality setting
+                        // ALWAYS start muted to prevent loud initial audio, then unmute via API
+                        
+                        videoSource = `https://www.youtube-nocookie.com/embed/${{videoId}}?` +
+                            `autoplay=1` +
+                            `&mute=1` +                  // Always start muted to prevent loud audio spike
+                            `&controls=0` +
+                            `&loop=1` +
+                            `&playlist=${{videoId}}` +  // Required for loop to work
+                            `&playsinline=1` +           // Mobile compatibility
+                            `&rel=0` +                   // No related videos
+                            `&modestbranding=1` +        // Minimal branding
+                            `&enablejsapi=1`;            // Enable JS API for volume and quality control
+                        log('Converted to YouTube nocookie embed URL:', videoSource);
+                        log('Using youtube-nocookie.com to prevent Error 153');
+                        log('YouTube quality: ' + REMOTE_VIDEO_QUALITY + ', Volume: ' + PREVIEW_VOLUME + '%');
+                    }} else {{
+                        log('Failed to extract YouTube video ID from:', youtubeUrl);
+                        throw new Error('Invalid YouTube URL format');
+                    }}
+                }} else {{
+                    // For local trailers, use Jellyfin's stream endpoint
+                    videoSource = `${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`;
+                    log('Using Jellyfin stream endpoint for local trailer:', videoSource);
+                }}
+
+                const container = trailerInfo.IsRemote
+                    ? createYouTubePreview(videoSource, element)
+                    : createVideoPreview(videoSource, element);
+                const video = container.querySelector(trailerInfo.IsRemote ? 'iframe' : 'video');
 
                 // Set current preview and card element BEFORE registering event listeners
                 // to avoid race conditions
@@ -589,30 +812,42 @@ public class HoverTrailerController : ControllerBase
                 currentPreview = container;
                 currentCardElement = element;
 
-                video.addEventListener('loadeddata', () => {{
-                    // Check if preview is still active
-                    if (!currentPreview) {{
-                        log('Preview was cancelled before loadeddata');
-                        return;
-                    }}
-                    container.style.opacity = PREVIEW_OPACITY;
-                    applyBackgroundBlur();
-                    video.play().catch(e => {{
-                        log('Error playing video:', e.name + ': ' + e.message);
-
-                        // If audio is not allowed, try to play muted
-                        if (e.name === 'NotAllowedError' && !video.muted) {{
-                            log('Audio not allowed, falling back to muted playback');
-                            video.muted = true;
-                            video.play().catch(muteError => {{
-                                log('Even muted playback failed:', muteError.name + ': ' + muteError.message);
-                            }});
+                if (trailerInfo.IsRemote) {{
+                    // For YouTube iframe, show immediately and apply blur
+                    log('YouTube iframe loaded, showing preview');
+                    setTimeout(() => {{
+                        if (currentPreview) {{
+                            container.style.opacity = PREVIEW_OPACITY;
+                            applyBackgroundBlur();
+                            log('YouTube preview visible');
                         }}
-                    }});
-                }});
+                    }}, 500); // Give iframe time to start loading
+                }} else {{
+                    // For local video, wait for loadeddata event
+                    video.addEventListener('loadeddata', () => {{
+                        if (!currentPreview) {{
+                            log('Preview was cancelled before loadeddata');
+                            return;
+                        }}
+                        log('Local video loadeddata event fired');
+                        container.style.opacity = PREVIEW_OPACITY;
+                        applyBackgroundBlur();
+                        video.play().catch(e => {{
+                            log('Error playing local video:', e.name + ': ' + e.message);
 
-                // Handle video metadata load for fit content mode
-                if (PREVIEW_SIZING_MODE === 'FitContent') {{
+                            if (e.name === 'NotAllowedError' && !video.muted) {{
+                                log('Audio not allowed, falling back to muted playback');
+                                video.muted = true;
+                                video.play().catch(muteError => {{
+                                    log('Even muted playback failed:', muteError.name + ': ' + muteError.message);
+                                }});
+                            }}
+                        }});
+                    }});
+                }}
+
+                // Handle video metadata load for fit content mode (only for local videos, not YouTube iframes)
+                if (PREVIEW_SIZING_MODE === 'FitContent' && !trailerInfo.IsRemote) {{
                     video.addEventListener('loadedmetadata', () => {{
                         try {{
                             log('Video metadata loaded for FitContent mode');
@@ -621,7 +856,7 @@ public class HoverTrailerController : ControllerBase
                                 log('Preview was cancelled before loadedmetadata, skipping resize');
                                 return;
                             }}
-                            
+
                             const cardRect = currentCardElement.getBoundingClientRect();
                             const videoAspectRatio = video.videoWidth / video.videoHeight;
                             const cardAspectRatio = cardRect.width / cardRect.height;
@@ -707,28 +942,35 @@ public class HoverTrailerController : ControllerBase
             log('Hiding preview');
             const previewToRemove = currentPreview;
             const videoToStop = previewToRemove.querySelector('video');
-            
-            // Stop video immediately to prevent further loading/events
+            const iframeToStop = previewToRemove.querySelector('iframe');
+
+            // Stop video or iframe immediately
             if (videoToStop) {{
+                log('Stopping video element');
                 videoToStop.pause();
                 videoToStop.src = '';
-                videoToStop.load(); // Reset the video element
+                videoToStop.load();
             }}
             
+            if (iframeToStop) {{
+                log('Stopping iframe (YouTube)');
+                iframeToStop.src = 'about:blank';
+            }}
+
             // Fade out animation
             currentPreview.style.opacity = '0';
             removeBackgroundBlur();
-            
+
             // Clear references immediately to prevent race conditions
             currentPreview = null;
             currentCardElement = null;
-            
+
             // Remove resize handler
             if (resizeHandler) {{
                 window.removeEventListener('resize', resizeHandler);
                 resizeHandler = null;
             }}
-            
+
             // Remove DOM element after fade animation
             setTimeout(() => {{
                 if (previewToRemove && previewToRemove.parentNode) {{
@@ -740,7 +982,7 @@ public class HoverTrailerController : ControllerBase
 
     function attachHoverListeners() {{
         const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
-        
+
         let newCardsCount = 0;
         movieCards.forEach(card => {{
             const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
@@ -748,7 +990,7 @@ public class HoverTrailerController : ControllerBase
 
             // Skip if this card already has listeners attached
             if (attachedCards.has(movieId)) return;
-            
+
             attachedCards.add(movieId);
             newCardsCount++;
 
@@ -772,7 +1014,7 @@ public class HoverTrailerController : ControllerBase
                 setTimeout(() => {{ isPlaying = false; }}, 2000);
             }});
         }});
-        
+
         if (newCardsCount > 0) {{
             log('Attached hover listeners to', newCardsCount, 'new movie cards');
         }}

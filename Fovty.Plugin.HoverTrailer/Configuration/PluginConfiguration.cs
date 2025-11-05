@@ -79,6 +79,17 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnablePreviewAudio { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the preview audio volume (0-100 percent).
+    /// </summary>
+    public int PreviewVolume { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the remote video quality for YouTube trailers.
+    /// Valid values: "adaptive", "hd480", "hd720", "hd1080", "hd2160".
+    /// </summary>
+    public string RemoteVideoQuality { get; set; } = "adaptive";
+
+    /// <summary>
     /// Gets or sets whether to enable background blurring during trailer playback.
     /// </summary>
     public bool EnableBackgroundBlur { get; set; } = false;
@@ -158,6 +169,19 @@ public class PluginConfiguration : BasePluginConfiguration
             yield return "Preview Size Percentage must be between 50 and 1500";
         }
 
+        // Preview volume validation
+        if (PreviewVolume < 0 || PreviewVolume > 100)
+        {
+            yield return "Preview Volume must be between 0 and 100";
+        }
+
+        // Remote video quality validation
+        var validQualities = new[] { "adaptive", "hd480", "hd720", "hd1080", "hd2160" };
+        if (!validQualities.Any(q => string.Equals(q, RemoteVideoQuality, StringComparison.OrdinalIgnoreCase)))
+        {
+            yield return "Remote Video Quality must be one of: adaptive, hd480, hd720, hd1080, hd2160";
+        }
+
         // Preview sizing mode validation
         if (!string.Equals(PreviewSizingMode, "Manual", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(PreviewSizingMode, "Percentage", StringComparison.OrdinalIgnoreCase) &&
@@ -200,6 +224,8 @@ public class PluginConfiguration : BasePluginConfiguration
             nameof(PreviewOpacity) => ValidatePreviewOpacity(),
             nameof(PreviewBorderRadius) => ValidatePreviewBorderRadius(),
             nameof(PreviewSizePercentage) => ValidatePreviewSizePercentage(),
+            nameof(PreviewVolume) => ValidatePreviewVolume(),
+            nameof(RemoteVideoQuality) => ValidateRemoteVideoQuality(),
             nameof(PreviewSizingMode) => ValidatePreviewSizingMode(),
             nameof(PreviewPositioningMode) => ValidatePreviewPositioningMode(),
             _ => null
@@ -261,6 +287,21 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         if (PreviewSizePercentage < 50 || PreviewSizePercentage > 1500)
             return "Preview Size Percentage must be between 50 and 1500";
+        return null;
+    }
+
+    private string? ValidatePreviewVolume()
+    {
+        if (PreviewVolume < 0 || PreviewVolume > 100)
+            return "Preview Volume must be between 0 and 100";
+        return null;
+    }
+
+    private string? ValidateRemoteVideoQuality()
+    {
+        var validQualities = new[] { "adaptive", "hd480", "hd720", "hd1080", "hd2160" };
+        if (!validQualities.Any(q => string.Equals(q, RemoteVideoQuality, StringComparison.OrdinalIgnoreCase)))
+            return "Remote Video Quality must be one of: adaptive, hd480, hd720, hd1080, hd2160";
         return null;
     }
 
