@@ -421,6 +421,8 @@ public class HoverTrailerController : ControllerBase
     let currentCardElement;
     let isPlaying = false;
     let resizeHandler;
+    let attachedCards = new Set(); // Track cards that already have listeners
+    let mutationDebounce = null;
 
     function log(message, ...args) {{
         if (DEBUG_LOGGING) {{
@@ -472,9 +474,8 @@ public class HoverTrailerController : ControllerBase
                     backdrop.parentNode.removeChild(backdrop);
                 }}
             }}, 300);
+            log('Background blur removed');
         }}
-
-        log('Background blur removed');
     }}
 
     function createVideoPreview(trailerPath, cardElement) {{
@@ -572,10 +573,28 @@ public class HoverTrailerController : ControllerBase
                 return response.json();
             }})
             .then(trailerInfo => {{
+                // Check if preview was cancelled during fetch (another hover started)
+                if (currentPreview || isPlaying) {{
+                    log('Preview cancelled during fetch - another preview is active');
+                    return;
+                }}
+                
+                log('Creating video preview for trailer:', trailerInfo.Name);
                 const container = createVideoPreview(`${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`, element);
                 const video = container.querySelector('video');
 
+                // Set current preview and card element BEFORE registering event listeners
+                // to avoid race conditions
+                document.body.appendChild(container);
+                currentPreview = container;
+                currentCardElement = element;
+
                 video.addEventListener('loadeddata', () => {{
+                    // Check if preview is still active
+                    if (!currentPreview) {{
+                        log('Preview was cancelled before loadeddata');
+                        return;
+                    }}
                     container.style.opacity = PREVIEW_OPACITY;
                     applyBackgroundBlur();
                     video.play().catch(e => {{
@@ -597,7 +616,12 @@ public class HoverTrailerController : ControllerBase
                     video.addEventListener('loadedmetadata', () => {{
                         try {{
                             log('Video metadata loaded for FitContent mode');
-                            // Recalculate cardRect in the event scope to ensure it's accessible
+                            // Check if preview is still active and card element exists
+                            if (!currentPreview || !currentCardElement) {{
+                                log('Preview was cancelled before loadedmetadata, skipping resize');
+                                return;
+                            }}
+                            
                             const cardRect = currentCardElement.getBoundingClientRect();
                             const videoAspectRatio = video.videoWidth / video.videoHeight;
                             const cardAspectRatio = cardRect.width / cardRect.height;
@@ -632,11 +656,6 @@ public class HoverTrailerController : ControllerBase
                         }}
                     }});
                 }}
-
-                // Append to body to avoid clipping by parent containers
-                document.body.appendChild(container);
-                currentPreview = container;
-                currentCardElement = element;
 
                 // Add resize handler to reposition container on window resize
                 resizeHandler = () => {{
@@ -685,19 +704,35 @@ public class HoverTrailerController : ControllerBase
 
     function hidePreview() {{
         if (currentPreview) {{
+            log('Hiding preview');
+            const previewToRemove = currentPreview;
+            const videoToStop = previewToRemove.querySelector('video');
+            
+            // Stop video immediately to prevent further loading/events
+            if (videoToStop) {{
+                videoToStop.pause();
+                videoToStop.src = '';
+                videoToStop.load(); // Reset the video element
+            }}
+            
+            // Fade out animation
             currentPreview.style.opacity = '0';
             removeBackgroundBlur();
+            
+            // Clear references immediately to prevent race conditions
+            currentPreview = null;
+            currentCardElement = null;
+            
+            // Remove resize handler
+            if (resizeHandler) {{
+                window.removeEventListener('resize', resizeHandler);
+                resizeHandler = null;
+            }}
+            
+            // Remove DOM element after fade animation
             setTimeout(() => {{
-                if (currentPreview && currentPreview.parentNode) {{
-                    currentPreview.parentNode.removeChild(currentPreview);
-                }}
-                currentPreview = null;
-                currentCardElement = null;
-
-                // Remove resize handler
-                if (resizeHandler) {{
-                    window.removeEventListener('resize', resizeHandler);
-                    resizeHandler = null;
+                if (previewToRemove && previewToRemove.parentNode) {{
+                    previewToRemove.parentNode.removeChild(previewToRemove);
                 }}
             }}, 300);
         }}
@@ -705,10 +740,17 @@ public class HoverTrailerController : ControllerBase
 
     function attachHoverListeners() {{
         const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
-
+        
+        let newCardsCount = 0;
         movieCards.forEach(card => {{
             const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
             if (!movieId) return;
+
+            // Skip if this card already has listeners attached
+            if (attachedCards.has(movieId)) return;
+            
+            attachedCards.add(movieId);
+            newCardsCount++;
 
             card.addEventListener('mouseenter', (e) => {{
                 if (isPlaying) return;
@@ -730,6 +772,10 @@ public class HoverTrailerController : ControllerBase
                 setTimeout(() => {{ isPlaying = false; }}, 2000);
             }});
         }});
+        
+        if (newCardsCount > 0) {{
+            log('Attached hover listeners to', newCardsCount, 'new movie cards');
+        }}
     }}
 
     // Initialize when DOM is ready
@@ -739,9 +785,13 @@ public class HoverTrailerController : ControllerBase
         attachHoverListeners();
     }}
 
-    // Re-attach listeners when navigation occurs
+    // Re-attach listeners when navigation occurs (debounced)
     const observer = new MutationObserver(() => {{
-        attachHoverListeners();
+        // Debounce to prevent excessive re-attachment
+        clearTimeout(mutationDebounce);
+        mutationDebounce = setTimeout(() => {{
+            attachHoverListeners();
+        }}, 500); // Wait 500ms after last DOM change
     }});
 
     observer.observe(document.body, {{
