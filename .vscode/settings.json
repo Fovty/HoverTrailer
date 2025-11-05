@@ -6,10 +6,10 @@
 
     // Build configuration
     "buildConfiguration": "Debug",
-    "targetFramework": "net8.0",
+    "targetFramework": "net9.0",
 
     // Local build paths
-    "buildOutputPath": "./Fovty.Plugin.HoverTrailer/bin/Debug/net8.0/publish",
+    "buildOutputPath": "./Fovty.Plugin.HoverTrailer/bin/Debug/net9.0/publish",
     "projectFile": "./Fovty.Plugin.HoverTrailer.sln",
     "pluginDllName": "Fovty.Plugin.HoverTrailer.dll"
 }

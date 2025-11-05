@@ -107,7 +107,7 @@ jobs:
         new_entry = {
             "version": version,
             "changelog": changelog,
-            "targetAbi": "10.10.0.0",
+            "targetAbi": "10.11.0.0",
             "sourceUrl": f"https://github.com/Fovty/HoverTrailer/releases/download/v{version}/HoverTrailer-{version}-server.zip",
             "checksum": checksum,
             "timestamp": timestamp

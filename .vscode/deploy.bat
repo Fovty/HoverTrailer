@@ -12,8 +12,8 @@ set REMOTE_HOST=%JELLYFIN_REMOTE_HOST%
 set REMOTE_USER=%JELLYFIN_REMOTE_USER%
 set REMOTE_PATH=%JELLYFIN_REMOTE_PATH%
 set BUILD_CONFIG=Debug
-set TARGET_FRAMEWORK=net8.0
-set BUILD_OUTPUT=./Fovty.Plugin.HoverTrailer/bin/Debug/net8.0/publish
+set TARGET_FRAMEWORK=net9.0
+set BUILD_OUTPUT=./Fovty.Plugin.HoverTrailer/bin/Debug/net9.0/publish
 set PROJECT_FILE=./Fovty.Plugin.HoverTrailer.sln
 
 echo === HoverTrailer Plugin Deployment ===

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using Fovty.Plugin.HoverTrailer.Configuration;
 using Fovty.Plugin.HoverTrailer.Helpers;
@@ -13,6 +15,7 @@ using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 
 namespace Fovty.Plugin.HoverTrailer;
 
@@ -47,7 +50,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             // Initialize client script injection if enabled
             if (Configuration.InjectClientScript)
             {
-                InitializeClientScriptInjection(applicationPaths, configurationManager, logger);
+                // Try File Transformation plugin first, fall back to direct injection
+                if (!TryRegisterFileTransformation(configurationManager, logger))
+                {
+                    LoggingHelper.LogInformation(logger, "44File Transformation plugin not available, using direct file injection method");
+                    InitializeClientScriptInjection(applicationPaths, configurationManager, logger);
+                }
             }
 
             LoggingHelper.LogInformation(logger, "HoverTrailer plugin initialization completed successfully.");
@@ -149,6 +157,130 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             LoggingHelper.LogError(logger, "Error during client script injection initialization: {Message}", ex.Message);
             LoggingHelper.LogDebug(logger, "Script injection error details: {Exception}", ex.ToString());
             throw new PluginInitializationException("Failed to initialize client script injection", ex);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to register transformation with File Transformation plugin using reflection.
+    /// </summary>
+    /// <param name="configurationManager">Configuration manager for network settings.</param>
+    /// <param name="logger">Logger instance for debug output.</param>
+    /// <returns>True if registration succeeded, false otherwise.</returns>
+    private bool TryRegisterFileTransformation(IServerConfigurationManager configurationManager, ILogger<Plugin> logger)
+    {
+        try
+        {
+            LoggingHelper.LogDebug(logger, "Attempting to register transformation with File Transformation plugin...");
+
+            // Find the FileTransformation assembly using reflection
+            Assembly? fileTransformationAssembly =
+                AssemblyLoadContext.All
+                    .SelectMany(x => x.Assemblies)
+                    .FirstOrDefault(x => x.FullName?.Contains("FileTransformation", StringComparison.OrdinalIgnoreCase) ?? false);
+
+            if (fileTransformationAssembly == null)
+            {
+                LoggingHelper.LogDebug(logger, "File Transformation plugin assembly not found in loaded assemblies");
+                return false;
+            }
+
+            LoggingHelper.LogDebug(logger, "Found File Transformation assembly: {AssemblyName}", fileTransformationAssembly.FullName);
+
+            // Get the PluginInterface type
+            Type? pluginInterfaceType = fileTransformationAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
+            if (pluginInterfaceType == null)
+            {
+                LoggingHelper.LogWarning(logger, "Could not find PluginInterface type in File Transformation assembly");
+                return false;
+            }
+            
+            // Get the RegisterTransformation method
+            MethodInfo? registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation");
+            if (registerMethod == null)
+            {
+                LoggingHelper.LogWarning(logger, "Could not find RegisterTransformation method in File Transformation plugin");
+                return false;
+            }
+
+            // Get base path for script URL
+            var basePath = GetBasePathFromConfiguration(configurationManager, logger);
+            var version = GetType().Assembly.GetName().Version?.ToString() ?? "Unknown";
+
+            // Store basePath and version for callback use
+            _transformBasePath = basePath;
+            _transformVersion = version;
+
+            // Create transformation payload as JObject (File Transformation expects Newtonsoft.Json.Linq.JObject)
+            var transformationPayload = new JObject
+            {
+                ["id"] = Guid.Parse("82c71cde-a52b-44f1-a18e-d93eb6a35ed0"), // Use HoverTrailer plugin GUID
+                ["fileNamePattern"] = "index\\.html$", // Regex pattern for index.html
+                ["callbackAssembly"] = GetType().Assembly.FullName,
+                ["callbackClass"] = GetType().FullName,
+                ["callbackMethod"] = nameof(TransformIndexHtmlCallback)
+            };
+
+            LoggingHelper.LogDebug(logger, "Invoking RegisterTransformation with payload: {Payload}", transformationPayload.ToString());
+
+            // Invoke the registration method
+            registerMethod.Invoke(null, new object[] { transformationPayload });
+
+            LoggingHelper.LogInformation(logger, "Successfully registered transformation with File Transformation plugin");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LoggingHelper.LogWarning(logger, "Failed to register with File Transformation plugin: {Message}", ex.Message);
+            LoggingHelper.LogInformation(logger, "File Transformation registration error details: {Exception}", ex.ToString());
+            return false;
+        }
+    }
+
+    // Store these for the callback method
+    private static string _transformBasePath = "";
+    private static string _transformVersion = "Unknown";
+
+    /// <summary>
+    /// Callback method invoked by File Transformation plugin.
+    /// This method signature must match what the File Transformation plugin expects.
+    /// </summary>
+    /// <param name="request">Object containing "contents" property with file content.</param>
+    /// <returns>Object containing "contents" property with transformed content.</returns>
+    public static object TransformIndexHtmlCallback(object request)
+    {
+        try
+        {
+            // Extract contents from request object using reflection
+            var requestType = request.GetType();
+            var contentsProperty = requestType.GetProperty("contents");
+            var content = contentsProperty?.GetValue(request)?.ToString() ?? "";
+
+            // Transform the content
+            string scriptReplace = "<script plugin=\"HoverTrailer\".*?></script>";
+            string scriptElement = string.Format("<script plugin=\"HoverTrailer\" version=\"{1}\" src=\"{0}/HoverTrailer/ClientScript\" defer></script>", _transformBasePath, _transformVersion);
+
+            // Check if script is already injected
+            if (!content.Contains(scriptElement))
+            {
+                // Remove old HoverTrailer scripts
+                content = Regex.Replace(content, scriptReplace, "");
+
+                // Find closing body tag
+                int bodyClosing = content.LastIndexOf("</body>");
+                if (bodyClosing != -1)
+                {
+                    // Insert script before closing body tag
+                    content = content.Insert(bodyClosing, scriptElement);
+                }
+            }
+
+            // Return response object with contents property
+            return new { contents = content };
+        }
+        catch
+        {
+            // If transformation fails, return original content
+            return request;
         }
     }
 

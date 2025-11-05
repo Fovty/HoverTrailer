@@ -401,6 +401,7 @@ public class HoverTrailerController : ControllerBase
     'use strict';
 
     const BASE_PATH = '{basePath}';
+    const API_BASE_URL = window.location.origin + BASE_PATH;
     const HOVER_DELAY = {config.HoverDelayMs};
     const DEBUG_LOGGING = {config.EnableDebugLogging.ToString().ToLower()};
     const PREVIEW_POSITIONING_MODE = '{config.PreviewPositioningMode}';
@@ -563,7 +564,7 @@ public class HoverTrailerController : ControllerBase
         log('Showing preview for movie:', movieId);
 
         // Get trailer info from API
-        fetch(`${{BASE_PATH}}/HoverTrailer/TrailerInfo/${{movieId}}`)
+        fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{movieId}}`)
             .then(response => {{
                 if (!response.ok) {{
                     throw new Error('Trailer not found');
@@ -571,7 +572,7 @@ public class HoverTrailerController : ControllerBase
                 return response.json();
             }})
             .then(trailerInfo => {{
-                const container = createVideoPreview(`${{BASE_PATH}}/Videos/${{trailerInfo.Id}}/stream`, element);
+                const container = createVideoPreview(`${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`, element);
                 const video = container.querySelector('video');
 
                 video.addEventListener('loadeddata', () => {{

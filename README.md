@@ -104,6 +104,50 @@ Access plugin settings through:
    - Force refresh browser (Ctrl+F5)
    - Clear Jellyfin web client cache
 
+### Docker Permission Issues
+If you encounter `Access to the path '/usr/share/jellyfin/web/index.html' is denied` or similar permission errors in Docker:
+
+**Option 1: Use File Transformation Plugin (Recommended)**
+
+HoverTrailer now automatically detects and uses the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin (v2.2.1.0+) if it's installed. This eliminates permission issues by transforming content at runtime without modifying files on disk.
+
+**Installation Steps:**
+1. Install the File Transformation plugin from the Jellyfin plugin catalog
+2. Restart Jellyfin
+3. HoverTrailer will automatically detect and use it (no configuration needed)
+4. Check logs to confirm: Look for "Successfully registered transformation with File Transformation plugin"
+
+**Benefits:**
+- No file permission issues in Docker environments
+- Works with read-only web directories
+- Survives Jellyfin updates without re-injection
+- No manual file modifications required
+
+**Option 2: Fix File Permissions**
+```bash
+# Find the actual index.html location
+docker exec -it jellyfin find / -name index.html
+
+# Fix ownership (replace 'jellyfin' with your container name and adjust user:group if needed)
+docker exec -it --user root jellyfin chown jellyfin:jellyfin /jellyfin/jellyfin-web/index.html
+
+# Restart container
+docker restart jellyfin
+```
+
+**Option 3: Manual Volume Mapping**
+```bash
+# Extract index.html from container
+docker cp jellyfin:/jellyfin/jellyfin-web/index.html /path/to/jellyfin/config/index.html
+
+# Add to docker-compose.yml volumes section:
+volumes:
+  - /path/to/jellyfin/config/index.html:/jellyfin/jellyfin-web/index.html
+```
+
+**How It Works:**
+HoverTrailer uses reflection-based integration to detect File Transformation at runtime. If the plugin is available, HoverTrailer registers a transformation handler that injects the script tag into index.html as it's served to browsers. If File Transformation isn't available, HoverTrailer falls back to direct file modification (which may require permissions as described in Options 2-3).
+
 ### Performance Issues
 1. **Adjust sizing settings**:
    - Lower "Content Scale" percentage
