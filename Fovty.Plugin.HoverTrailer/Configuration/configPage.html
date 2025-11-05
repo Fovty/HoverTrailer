@@ -211,6 +211,24 @@
                                 <div class="fieldDescription">Allow sound to play during trailer previews</div>
                             </div>
 
+                            <div class="inputContainer" id="volumeContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="PreviewVolume">Preview Volume (%)</label>
+                                <input id="PreviewVolume" name="PreviewVolume" type="number" min="0" max="100" step="1" is="emby-input" />
+                                <div class="fieldDescription">Audio volume level for preview playback (0-100 percent)</div>
+                            </div>
+
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="RemoteVideoQuality">Remote Video Quality (YouTube)</label>
+                                <select id="RemoteVideoQuality" name="RemoteVideoQuality" is="emby-select" class="emby-select-withcolor emby-select">
+                                    <option value="adaptive">Adaptive (Auto-select based on connection)</option>
+                                    <option value="hd480">480p</option>
+                                    <option value="hd720">720p HD</option>
+                                    <option value="hd1080">1080p Full HD</option>
+                                    <option value="hd2160">2160p 4K</option>
+                                </select>
+                                <div class="fieldDescription">Video quality for YouTube trailer previews (higher quality uses more bandwidth)</div>
+                            </div>
+
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label class="emby-checkbox-label">
                                     <input id="EnableBackgroundBlur" name="EnableBackgroundBlur" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
@@ -272,6 +290,8 @@
                     document.querySelector('#PreviewOpacity').value = config.PreviewOpacity || 0.9;
                     document.querySelector('#PreviewBorderRadius').value = config.PreviewBorderRadius || 8;
                     document.querySelector('#EnablePreviewAudio').checked = config.EnablePreviewAudio || false;
+                    document.querySelector('#PreviewVolume').value = config.PreviewVolume || 50;
+                    document.querySelector('#RemoteVideoQuality').value = config.RemoteVideoQuality || 'adaptive';
                     document.querySelector('#EnableBackgroundBlur').checked = config.EnableBackgroundBlur || false;
 
                     // Update positioning and sizing mode visibility
@@ -308,6 +328,8 @@
                     config.PreviewOpacity = parseFloat(document.querySelector('#PreviewOpacity').value) || 0.9;
                     config.PreviewBorderRadius = parseInt(document.querySelector('#PreviewBorderRadius').value) || 8;
                     config.EnablePreviewAudio = document.querySelector('#EnablePreviewAudio').checked;
+                    config.PreviewVolume = parseInt(document.querySelector('#PreviewVolume').value) || 50;
+                    config.RemoteVideoQuality = document.querySelector('#RemoteVideoQuality').value || 'adaptive';
                     config.EnableBackgroundBlur = document.querySelector('#EnableBackgroundBlur').checked;
 
                     // Debug Settings
