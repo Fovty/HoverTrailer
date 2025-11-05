@@ -67,26 +67,6 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 Access plugin settings through:
 **Jellyfin Admin Dashboard** → **Plugins** → **HoverTrailer** → **Settings**
 
-### Hover Preview Customization
-
-| Setting | Description | Default | Range |
-|---------|-------------|---------|-------|
-| **Horizontal Offset** | X-axis position adjustment | 0px | -2000 to +2000px |
-| **Vertical Offset** | Y-axis position adjustment | 0px | -2000 to +2000px |
-| **Sizing Mode** | How to size the preview | Fit to Video Content | Fixed/Fit to Content |
-| **Width** | Manual width (Fixed mode) | 400px | 100-2000px |
-| **Height** | Manual height (Fixed mode) | 225px | 100-2000px |
-| **Content Scale** | Percentage scaling (Fit mode) | 200% | 50-1500% |
-| **Preview Opacity** | Transparency level | 1.0 | 0.1-1.0 |
-| **Border Radius** | Corner rounding | 10px | 0-50px |
-
-### Audio & Debug Settings
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Enable Preview Audio** | Play audio with trailers | ✅ Enabled |
-| **Enable Debug Mode** | Detailed console logging | ✅ Enabled |
-
 ## Troubleshooting
 
 ### Trailers Not Playing
@@ -152,18 +132,6 @@ volumes:
   - /path/to/jellyfin/config/index.html:/jellyfin/jellyfin-web/index.html
 ```
 
-**How It Works:**
-HoverTrailer uses reflection-based integration to detect File Transformation at runtime. If the plugin is available, HoverTrailer registers a transformation handler that injects the script tag into index.html as it's served to browsers. If File Transformation isn't available, HoverTrailer falls back to direct file modification (which may require permissions as described in Options 2-3).
-
-### Performance Issues
-1. **Adjust sizing settings**:
-   - Lower "Content Scale" percentage
-   - Use "Fixed" sizing mode for consistent performance
-
-2. **Network considerations**:
-   - Remote trailers require internet connectivity
-   - Local trailers provide better performance
-
 ## Development
 
 ### Building from Source
@@ -174,16 +142,6 @@ cd hovertrailer
 
 # Build plugin (warnings suppressed due to StyleCop/Code Analysis)
 dotnet build --configuration Release --property:TreatWarningsAsErrors=false
-```
-
-### Project Structure
-```
-Fovty.Plugin.HoverTrailer/
-├── Api/                    # API controllers
-├── Configuration/          # Plugin configuration
-├── Exceptions/            # Custom exceptions
-├── Helpers/               # Utility classes
-└── Models/                # Data models
 ```
 
 ## Contributing
