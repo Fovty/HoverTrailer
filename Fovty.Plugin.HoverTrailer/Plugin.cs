@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Fovty.Plugin.HoverTrailer.Configuration;
 using Fovty.Plugin.HoverTrailer.Helpers;
 using Fovty.Plugin.HoverTrailer.Exceptions;
+using Fovty.Plugin.HoverTrailer.Models;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Configuration;
@@ -53,7 +54,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 // Try File Transformation plugin first, fall back to direct injection
                 if (!TryRegisterFileTransformation(configurationManager, logger))
                 {
-                    LoggingHelper.LogInformation(logger, "44File Transformation plugin not available, using direct file injection method");
+                    LoggingHelper.LogInformation(logger, "File Transformation plugin not available, using direct file injection method");
                     InitializeClientScriptInjection(applicationPaths, configurationManager, logger);
                 }
             }
@@ -180,7 +181,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
             if (fileTransformationAssembly == null)
             {
-                LoggingHelper.LogDebug(logger, "File Transformation plugin assembly not found in loaded assemblies");
+                LoggingHelper.LogWarning(logger, "File Transformation plugin assembly not found in loaded assemblies");
                 return false;
             }
 
@@ -193,7 +194,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 LoggingHelper.LogWarning(logger, "Could not find PluginInterface type in File Transformation assembly");
                 return false;
             }
-            
+
             // Get the RegisterTransformation method
             MethodInfo? registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation");
             if (registerMethod == null)
@@ -211,76 +212,87 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             _transformVersion = version;
 
             // Create transformation payload as JObject (File Transformation expects Newtonsoft.Json.Linq.JObject)
+            // IMPORTANT: Use plain filename "index.html", not regex pattern
             var transformationPayload = new JObject
             {
-                ["id"] = Guid.Parse("82c71cde-a52b-44f1-a18e-d93eb6a35ed0"), // Use HoverTrailer plugin GUID
-                ["fileNamePattern"] = "index\\.html$", // Regex pattern for index.html
+                ["id"] = "82c71cde-a52b-44f1-a18e-d93eb6a35ed0", // Use HoverTrailer plugin GUID as string
+                ["fileNamePattern"] = "index.html", // Plain filename, not regex
                 ["callbackAssembly"] = GetType().Assembly.FullName,
                 ["callbackClass"] = GetType().FullName,
                 ["callbackMethod"] = nameof(TransformIndexHtmlCallback)
             };
 
-            LoggingHelper.LogDebug(logger, "Invoking RegisterTransformation with payload: {Payload}", transformationPayload.ToString());
-
             // Invoke the registration method
             registerMethod.Invoke(null, new object[] { transformationPayload });
 
             LoggingHelper.LogInformation(logger, "Successfully registered transformation with File Transformation plugin");
+
             return true;
         }
         catch (Exception ex)
         {
             LoggingHelper.LogWarning(logger, "Failed to register with File Transformation plugin: {Message}", ex.Message);
-            LoggingHelper.LogInformation(logger, "File Transformation registration error details: {Exception}", ex.ToString());
+            LoggingHelper.LogDebug(logger, "File Transformation registration error details: {Exception}", ex.ToString());
             return false;
         }
     }
 
     // Store these for the callback method
-    private static string _transformBasePath = "";
+    private static string _transformBasePath = string.Empty;
     private static string _transformVersion = "Unknown";
 
     /// <summary>
     /// Callback method invoked by File Transformation plugin.
-    /// This method signature must match what the File Transformation plugin expects.
+    /// This method signature must match what the File Transformation plugin expects:
+    /// - Parameter: PatchRequestPayload with Contents property.
+    /// - Return: string (the transformed content).
     /// </summary>
-    /// <param name="request">Object containing "contents" property with file content.</param>
-    /// <returns>Object containing "contents" property with transformed content.</returns>
-    public static object TransformIndexHtmlCallback(object request)
+    /// <param name="payload">Payload containing the file contents to transform.</param>
+    /// <returns>Transformed HTML content as string.</returns>
+    public static string TransformIndexHtmlCallback(PatchRequestPayload payload)
     {
         try
         {
-            // Extract contents from request object using reflection
-            var requestType = request.GetType();
-            var contentsProperty = requestType.GetProperty("contents");
-            var content = contentsProperty?.GetValue(request)?.ToString() ?? "";
+            var content = payload?.Contents ?? string.Empty;
+
+            if (string.IsNullOrEmpty(content))
+            {
+                return content;
+            }
 
             // Transform the content
             string scriptReplace = "<script plugin=\"HoverTrailer\".*?></script>";
-            string scriptElement = string.Format("<script plugin=\"HoverTrailer\" version=\"{1}\" src=\"{0}/HoverTrailer/ClientScript\" defer></script>", _transformBasePath, _transformVersion);
+            string scriptElement = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "<script plugin=\"HoverTrailer\" version=\"{1}\" src=\"{0}/HoverTrailer/ClientScript\" defer></script>",
+                _transformBasePath,
+                _transformVersion);
 
             // Check if script is already injected
-            if (!content.Contains(scriptElement))
+            if (content.Contains(scriptElement, StringComparison.Ordinal))
             {
-                // Remove old HoverTrailer scripts
-                content = Regex.Replace(content, scriptReplace, "");
-
-                // Find closing body tag
-                int bodyClosing = content.LastIndexOf("</body>");
-                if (bodyClosing != -1)
-                {
-                    // Insert script before closing body tag
-                    content = content.Insert(bodyClosing, scriptElement);
-                }
+                return content;
             }
 
-            // Return response object with contents property
-            return new { contents = content };
+            // Remove old HoverTrailer scripts
+            content = Regex.Replace(content, scriptReplace, string.Empty);
+
+            // Find closing body tag
+            int bodyClosing = content.LastIndexOf("</body>", StringComparison.Ordinal);
+            if (bodyClosing == -1)
+            {
+                return content;
+            }
+
+            // Insert script before closing body tag
+            content = content.Insert(bodyClosing, scriptElement);
+
+            return content;
         }
         catch
         {
             // If transformation fails, return original content
-            return request;
+            return payload?.Contents ?? string.Empty;
         }
     }
 
