@@ -435,7 +435,7 @@ public class HoverTrailerController : ControllerBase
     let currentCardElement;
     let isPlaying = false;
     let resizeHandler;
-    let attachedCards = new Set(); // Track cards that already have listeners
+    let attachedCards = new WeakSet(); // Track actual card elements that already have listeners
     let mutationDebounce = null;
 
     function log(message, ...args) {{
@@ -499,7 +499,7 @@ public class HoverTrailerController : ControllerBase
             /youtube\.com\/embed\/([^&\?]+)/,
             /youtube\.com\/v\/([^&\?]+)/
         ];
-        
+
         for (const pattern of patterns) {{
             const match = url.match(pattern);
             if (match && match[1]) {{
@@ -507,7 +507,7 @@ public class HoverTrailerController : ControllerBase
                 return match[1];
             }}
         }}
-        
+
         log('Failed to extract video ID from URL:', url);
         return null;
     }}
@@ -529,7 +529,7 @@ public class HoverTrailerController : ControllerBase
             // Apply the same logic as local videos
             const youtubeAspectRatio = 16 / 9;  // YouTube standard aspect ratio
             const cardAspectRatio = cardRect.width / cardRect.height;
-            
+
             if (youtubeAspectRatio > cardAspectRatio) {{
                 // Video is wider than card, fit to width
                 containerWidth = cardRect.width;
@@ -539,11 +539,11 @@ public class HoverTrailerController : ControllerBase
                 containerHeight = cardRect.height;
                 containerWidth = Math.round(cardRect.height * youtubeAspectRatio);
             }}
-            
+
             // Apply percentage scaling
             containerWidth = Math.round(containerWidth * (PREVIEW_SIZE_PERCENTAGE / 100));
             containerHeight = Math.round(containerHeight * (PREVIEW_SIZE_PERCENTAGE / 100));
-            
+
             log(`YouTube FitContent dimensions: ${{containerWidth}}x${{containerHeight}} (${{PREVIEW_SIZE_PERCENTAGE}}% of calculated fit)`);
         }} else {{
             // Manual mode uses configured width/height
@@ -619,7 +619,7 @@ public class HoverTrailerController : ControllerBase
             setTimeout(() => {{
                 try {{
                     const volumePercent = ENABLE_PREVIEW_AUDIO ? PREVIEW_VOLUME : 0;
-                    
+
                     // Set playback quality using IFrame API (2025 method)
                     if (REMOTE_VIDEO_QUALITY !== 'adaptive') {{
                         iframe.contentWindow.postMessage(JSON.stringify({{
@@ -629,7 +629,7 @@ public class HoverTrailerController : ControllerBase
                         }}), '*');
                         log('YouTube quality set to: ' + REMOTE_VIDEO_QUALITY);
                     }}
-                    
+
                     if (volumePercent === 0) {{
                         // Keep muted if volume is 0 or audio is disabled
                         log('YouTube iframe kept muted (volume=0 or audio disabled)');
@@ -722,7 +722,7 @@ public class HoverTrailerController : ControllerBase
         video.muted = !ENABLE_PREVIEW_AUDIO;
         video.loop = true;
         video.preload = 'metadata';
-        
+
         // Set volume based on configuration (0-100 range converted to 0.0-1.0)
         if (ENABLE_PREVIEW_AUDIO) {{
             video.volume = PREVIEW_VOLUME / 100.0;
@@ -770,14 +770,14 @@ public class HoverTrailerController : ControllerBase
                     // For remote YouTube trailers, convert to embed URL
                     const youtubeUrl = trailerInfo.Path;
                     log('Original YouTube URL:', youtubeUrl);
-                    
+
                     // Extract video ID from YouTube URL
                     const videoId = extractYouTubeVideoId(youtubeUrl);
                     if (videoId) {{
                         // Use youtube-nocookie.com to avoid Error 153 and privacy issues
                         // Enable JS API for volume control and quality setting
                         // ALWAYS start muted to prevent loud initial audio, then unmute via API
-                        
+
                         videoSource = `https://www.youtube-nocookie.com/embed/${{videoId}}?` +
                             `autoplay=1` +
                             `&mute=1` +                  // Always start muted to prevent loud audio spike
@@ -951,7 +951,7 @@ public class HoverTrailerController : ControllerBase
                 videoToStop.src = '';
                 videoToStop.load();
             }}
-            
+
             if (iframeToStop) {{
                 log('Stopping iframe (YouTube)');
                 iframeToStop.src = 'about:blank';
@@ -977,21 +977,26 @@ public class HoverTrailerController : ControllerBase
                     previewToRemove.parentNode.removeChild(previewToRemove);
                 }}
             }}, 300);
+            
         }}
     }}
 
     function attachHoverListeners() {{
         const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
-
         let newCardsCount = 0;
+        
         movieCards.forEach(card => {{
+            // Skip if this card element already has listeners attached
+            if (attachedCards.has(card)) return;
+            
             const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
-            if (!movieId) return;
+            if (!movieId) {{
+                log('Warning: Found movie card without ID');
+                return;
+            }}
 
-            // Skip if this card already has listeners attached
-            if (attachedCards.has(movieId)) return;
-
-            attachedCards.add(movieId);
+            // Mark this card element as having listeners
+            attachedCards.add(card);
             newCardsCount++;
 
             card.addEventListener('mouseenter', (e) => {{
@@ -1016,7 +1021,7 @@ public class HoverTrailerController : ControllerBase
         }});
 
         if (newCardsCount > 0) {{
-            log('Attached hover listeners to', newCardsCount, 'new movie cards');
+            console.log(`[HoverTrailer] Attached hover listeners to ${{newCardsCount}} new movie cards`);
         }}
     }}
 
@@ -1028,12 +1033,37 @@ public class HoverTrailerController : ControllerBase
     }}
 
     // Re-attach listeners when navigation occurs (debounced)
-    const observer = new MutationObserver(() => {{
-        // Debounce to prevent excessive re-attachment
-        clearTimeout(mutationDebounce);
-        mutationDebounce = setTimeout(() => {{
-            attachHoverListeners();
-        }}, 500); // Wait 500ms after last DOM change
+    const observer = new MutationObserver((mutations) => {{
+        // Check if any mutations added movie cards
+        let hasMovieCardChanges = false;
+        for (const mutation of mutations) {{
+            if (mutation.addedNodes.length > 0) {{
+                for (const node of mutation.addedNodes) {{
+                    if (node.nodeType === 1) {{ // Element node
+                        // Check if it's a movie card or contains movie cards
+                        if (node.matches && (node.matches('[data-type=""Movie""]') || node.matches('.card[data-itemtype=""Movie""]'))) {{
+                            hasMovieCardChanges = true;
+                            break;
+                        }}
+                        if (node.querySelector && node.querySelector('[data-type=""Movie""], .card[data-itemtype=""Movie""]')) {{
+                            hasMovieCardChanges = true;
+                            break;
+                        }}
+                    }}
+                }}
+            }}
+            if (hasMovieCardChanges) break;
+        }}
+        
+        // Only process if movie cards were added
+        if (hasMovieCardChanges) {{
+            // Debounce to prevent excessive re-attachment
+            clearTimeout(mutationDebounce);
+            mutationDebounce = setTimeout(() => {{
+                log('DOM mutation detected, re-attaching listeners...');
+                attachHoverListeners();
+            }}, 500);
+        }}
     }});
 
     observer.observe(document.body, {{
