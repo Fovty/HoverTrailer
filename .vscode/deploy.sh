@@ -15,8 +15,8 @@ REMOTE_HOST="${JELLYFIN_REMOTE_HOST}"
 REMOTE_USER="${JELLYFIN_REMOTE_USER}"
 REMOTE_PATH="${JELLYFIN_REMOTE_PATH}"
 BUILD_CONFIG="Debug"
-TARGET_FRAMEWORK="net8.0"
-BUILD_OUTPUT="./Fovty.Plugin.HoverTrailer/bin/Debug/net8.0/publish"
+TARGET_FRAMEWORK="net9.0"
+BUILD_OUTPUT="./Fovty.Plugin.HoverTrailer/bin/Debug/net9.0/publish"
 PROJECT_FILE="./Fovty.Plugin.HoverTrailer.sln"
 
 # Check for JELLYFIN_REMOTE_PASSWORD environment variable
@@ -51,6 +51,7 @@ clean_build() {
     echo -e "${YELLOW}Cleaning previous build...${NC}"
 
     # Clean using dotnet clean
+    export PATH="/home/user/.dotnet:$PATH"
     dotnet clean "$PROJECT_FILE" -c "$BUILD_CONFIG"
     if [ $? -ne 0 ]; then echo -e "${RED}❌ Dotnet clean failed${NC}"; exit 1; fi
 
@@ -64,6 +65,7 @@ clean_build() {
 
 build_plugin() {
     echo -e "${YELLOW}Building plugin...${NC}"
+    export PATH="/home/user/.dotnet:$PATH"
     dotnet publish "$PROJECT_FILE" -c "$BUILD_CONFIG" -f "$TARGET_FRAMEWORK" \
         --property:TreatWarningsAsErrors=false \
         /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary

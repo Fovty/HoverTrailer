@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Mime;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
@@ -31,16 +32,19 @@ public class HoverTrailerController : ControllerBase
 {
     private readonly ILogger<HoverTrailerController> _logger;
     private readonly ILibraryManager _libraryManager;
+    private readonly IServerConfigurationManager _serverConfigurationManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HoverTrailerController"/> class.
     /// </summary>
     /// <param name="logger">Instance of the <see cref="ILogger{HoverTrailerController}"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
-    public HoverTrailerController(ILogger<HoverTrailerController> logger, ILibraryManager libraryManager)
+    /// <param name="serverConfigurationManager">Instance of the <see cref="IServerConfigurationManager"/> interface.</param>
+    public HoverTrailerController(ILogger<HoverTrailerController> logger, ILibraryManager libraryManager, IServerConfigurationManager serverConfigurationManager)
     {
         _logger = logger;
         _libraryManager = libraryManager;
+        _serverConfigurationManager = serverConfigurationManager;
     }
 
     /// <summary>
@@ -89,8 +93,9 @@ public class HoverTrailerController : ControllerBase
                 return BadRequest(error);
             }
 
-            var script = GetHoverTrailerScript(config);
-            LoggingHelper.LogDebug(_logger, "Successfully served client script");
+            var basePath = GetBasePath();
+            var script = GetHoverTrailerScript(config, basePath);
+            LoggingHelper.LogDebug(_logger, "Successfully served client script with base path: {BasePath}", basePath);
             return Content(script, "application/javascript");
         }
         catch (ConfigurationException ex)
@@ -356,16 +361,47 @@ public class HoverTrailerController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves the base path from Jellyfin's network configuration.
+    /// </summary>
+    /// <returns>The configured base path or empty string if unavailable.</returns>
+    private string GetBasePath()
+    {
+        try
+        {
+            LoggingHelper.LogDebug(_logger, "Retrieving base path from network configuration...");
+
+            var networkConfig = _serverConfigurationManager.GetConfiguration("network");
+            var configType = networkConfig.GetType();
+            var basePathField = configType.GetProperty("BaseUrl");
+            var confBasePath = basePathField?.GetValue(networkConfig)?.ToString()?.Trim('/');
+
+            var basePath = string.IsNullOrEmpty(confBasePath) ? "" : "/" + confBasePath;
+
+            LoggingHelper.LogDebug(_logger, "Retrieved base path: '{BasePath}'", basePath);
+            return basePath;
+        }
+        catch (Exception ex)
+        {
+            LoggingHelper.LogWarning(_logger, "Unable to get base path from network configuration, using default '': {Message}", ex.Message);
+            LoggingHelper.LogDebug(_logger, "Base path retrieval error details: {Exception}", ex.ToString());
+            return "";
+        }
+    }
+
+    /// <summary>
     /// Gets the hover trailer client script.
     /// </summary>
     /// <param name="config">The plugin configuration.</param>
+    /// <param name="basePath">The base path for API URLs.</param>
     /// <returns>The client script.</returns>
-    private static string GetHoverTrailerScript(Configuration.PluginConfiguration config)
+    private static string GetHoverTrailerScript(Configuration.PluginConfiguration config, string basePath)
     {
         return $@"
 (function() {{
     'use strict';
 
+    const BASE_PATH = '{basePath}';
+    const API_BASE_URL = window.location.origin + BASE_PATH;
     const HOVER_DELAY = {config.HoverDelayMs};
     const DEBUG_LOGGING = {config.EnableDebugLogging.ToString().ToLower()};
     const PREVIEW_POSITIONING_MODE = '{config.PreviewPositioningMode}';
@@ -528,7 +564,7 @@ public class HoverTrailerController : ControllerBase
         log('Showing preview for movie:', movieId);
 
         // Get trailer info from API
-        fetch(`/HoverTrailer/TrailerInfo/${{movieId}}`)
+        fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{movieId}}`)
             .then(response => {{
                 if (!response.ok) {{
                     throw new Error('Trailer not found');
@@ -536,7 +572,7 @@ public class HoverTrailerController : ControllerBase
                 return response.json();
             }})
             .then(trailerInfo => {{
-                const container = createVideoPreview(`/Videos/${{trailerInfo.Id}}/stream`, element);
+                const container = createVideoPreview(`${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`, element);
                 const video = container.querySelector('video');
 
                 video.addEventListener('loadeddata', () => {{

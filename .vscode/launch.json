@@ -3,51 +3,31 @@
     "configurations": [
         {
             "name": "Clean Build and Deploy HoverTrailer",
-            "type": "coreclr",
+            "type": "node-terminal",
             "request": "launch",
-            "preLaunchTask": "build-and-deploy",
-            "program": "dotnet",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "internalConsoleOptions": "openOnSessionStart"
+            "command": "echo 'Task complete! Check the terminal output above for results.'; exit 0",
+            "preLaunchTask": "build-and-deploy"
         },
         {
             "name": "Quick Deploy (No Build)",
-            "type": "coreclr",
+            "type": "node-terminal",
             "request": "launch",
-            "preLaunchTask": "quick-deploy",
-            "program": "dotnet",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "internalConsoleOptions": "openOnSessionStart"
+            "command": "echo 'Task complete! Check the terminal output above for results.'; exit 0",
+            "preLaunchTask": "quick-deploy"
         },
         {
             "name": "Full Deploy (Clean + Build + Deploy + Restart)",
-            "type": "coreclr",
+            "type": "node-terminal",
             "request": "launch",
-            "preLaunchTask": "full-deploy",
-            "program": "dotnet",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "internalConsoleOptions": "openOnSessionStart"
+            "command": "echo 'Task complete! Check the terminal output above for results.'; exit 0",
+            "preLaunchTask": "full-deploy"
         },
         {
             "name": "Clean Build Only",
-            "type": "coreclr",
+            "type": "node-terminal",
             "request": "launch",
-            "preLaunchTask": "clean-build",
-            "program": "dotnet",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "internalConsole",
-            "internalConsoleOptions": "openOnSessionStart"
+            "command": "echo 'Task complete! Check the terminal output above for results.'; exit 0",
+            "preLaunchTask": "clean-build"
         }
     ]
 }
