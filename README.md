@@ -40,12 +40,15 @@
 <details>
 <summary>▶️ <b>Show Preview Videos</b></summary>
 <br/>
-<table>
-<tr>
-<td align="center"><img src="assets/preview_centered.gif" width="600" alt="Centered mode animation"/></td>
-<td align="center"><img src="assets/preview_manual.gif" width="600" alt="Manual mode animation"/></td>
-</tr>
-</table>
+
+**Centered Mode**
+
+<img src="assets/preview_centered.gif" width="700" alt="Centered mode animation"/>
+
+**Manual Mode**
+
+<img src="assets/preview_manual.gif" width="700" alt="Manual mode animation"/>
+
 </details>
 
 </div>
