@@ -15,6 +15,41 @@
 </a>
 </div>
 
+## Preview
+
+<div align="center">
+<table>
+<tr>
+<td align="center">
+
+<sub>Centered Mode, Background blur, higher scaling, no offset</sub>
+
+<img src="assets/preview_centered.png" width="600" alt="Centered mode preview"/>
+
+</td>
+<td align="center">
+
+<sub>Manual Mode, No blur, lower scaling, custom offset</sub>
+
+<img src="assets/preview_manual.png" width="600" alt="Manual mode preview"/>
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary>▶️ <b>Show Preview Videos</b></summary>
+<br/>
+<table>
+<tr>
+<td align="center"><img src="assets/preview_centered.gif" width="600" alt="Centered mode animation"/></td>
+<td align="center"><img src="assets/preview_manual.gif" width="600" alt="Manual mode animation"/></td>
+</tr>
+</table>
+</details>
+
+</div>
+
 ## Manifest URL
 
 ```
