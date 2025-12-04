@@ -22,16 +22,16 @@
 <tr>
 <td align="center">
 
-<sub>Centered Mode, Background blur, higher scaling, no offset</sub>
+<sub>Configuration 1 - Centered Positioning, Background Blur, Higher Scaling, No Offset</sub>
 
-<img src="assets/preview_centered.png" width="600" alt="Centered mode preview"/>
+<img src="assets/preview_centered.png" width="600" alt="Centered Positioning preview"/>
 
 </td>
 <td align="center">
 
-<sub>Manual Mode, No blur, lower scaling, custom offset</sub>
+<sub>Configuration 2 - Custom Positioning, No Blur, Lower Scaling, Custom Offset</sub>
 
-<img src="assets/preview_manual.png" width="600" alt="Manual mode preview"/>
+<img src="assets/preview_manual.png" width="600" alt="Custom Positioning preview"/>
 
 </td>
 </tr>
@@ -41,13 +41,13 @@
 <summary>▶️ <b>Show Preview Videos</b></summary>
 <br/>
 
-**Centered Mode**
+**Configuration 1**
 
-<img src="assets/preview_centered.gif" width="700" alt="Centered mode animation"/>
+<img src="assets/preview_centered.gif" width="700" alt="Centered Positioning animation"/>
 
-**Manual Mode**
+**Configuration 2**
 
-<img src="assets/preview_manual.gif" width="700" alt="Manual mode animation"/>
+<img src="assets/preview_manual.gif" width="700" alt="Custom Positioning animation"/>
 
 </details>
 
