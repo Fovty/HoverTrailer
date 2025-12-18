@@ -238,28 +238,31 @@ public class HoverTrailerController : ControllerBase
             LoggingHelper.LogDebug(_logger, "No local or remote trailers found for movie: {MovieName} (ID: {MovieId})", movie.Name, movieId);
 
             // Also check if there are any files in the movie directory that might be trailers (for debugging)
-            var movieDir = System.IO.Path.GetDirectoryName(movie.Path);
-            if (!string.IsNullOrEmpty(movieDir) && System.IO.Directory.Exists(movieDir))
+            if (Plugin.Instance?.Configuration?.EnableDebugLogging == true)
             {
-                var files = System.IO.Directory.GetFiles(movieDir, "*", System.IO.SearchOption.TopDirectoryOnly);
-                LoggingHelper.LogDebug(_logger, "Files in movie directory {MovieDir}: {Files}",
-                    movieDir, string.Join(", ", files.Select(System.IO.Path.GetFileName)));
-
-                // Look for potential trailer files
-                var potentialTrailers = files.Where(f =>
-                    f.Contains("trailer", StringComparison.OrdinalIgnoreCase) ||
-                    f.Contains("-trailer", StringComparison.OrdinalIgnoreCase) ||
-                    f.Contains(".trailer.", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                if (potentialTrailers.Any())
+                var movieDir = System.IO.Path.GetDirectoryName(movie.Path);
+                if (!string.IsNullOrEmpty(movieDir) && System.IO.Directory.Exists(movieDir))
                 {
-                    LoggingHelper.LogDebug(_logger, "Potential trailer files found but not detected by Jellyfin: {PotentialTrailers}",
-                        string.Join(", ", potentialTrailers.Select(System.IO.Path.GetFileName)));
-                }
-                else
-                {
-                    LoggingHelper.LogDebug(_logger, "No potential trailer files found in directory");
+                    var files = System.IO.Directory.GetFiles(movieDir, "*", System.IO.SearchOption.TopDirectoryOnly);
+                    LoggingHelper.LogDebug(_logger, "Files in movie directory {MovieDir}: {Files}",
+                        movieDir, string.Join(", ", files.Select(System.IO.Path.GetFileName)));
+
+                    // Look for potential trailer files
+                    var potentialTrailers = files.Where(f =>
+                        f.Contains("trailer", StringComparison.OrdinalIgnoreCase) ||
+                        f.Contains("-trailer", StringComparison.OrdinalIgnoreCase) ||
+                        f.Contains(".trailer.", StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (potentialTrailers.Any())
+                    {
+                        LoggingHelper.LogDebug(_logger, "Potential trailer files found but not detected by Jellyfin: {PotentialTrailers}",
+                            string.Join(", ", potentialTrailers.Select(System.IO.Path.GetFileName)));
+                    }
+                    else
+                    {
+                        LoggingHelper.LogDebug(_logger, "No potential trailer files found in directory");
+                    }
                 }
             }
 
@@ -977,18 +980,18 @@ public class HoverTrailerController : ControllerBase
                     previewToRemove.parentNode.removeChild(previewToRemove);
                 }}
             }}, 300);
-            
+
         }}
     }}
 
     function attachHoverListeners() {{
         const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
         let newCardsCount = 0;
-        
+
         movieCards.forEach(card => {{
             // Skip if this card element already has listeners attached
             if (attachedCards.has(card)) return;
-            
+
             const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
             if (!movieId) {{
                 log('Warning: Found movie card without ID');
@@ -1054,7 +1057,7 @@ public class HoverTrailerController : ControllerBase
             }}
             if (hasMovieCardChanges) break;
         }}
-        
+
         // Only process if movie cards were added
         if (hasMovieCardChanges) {{
             // Debounce to prevent excessive re-attachment
