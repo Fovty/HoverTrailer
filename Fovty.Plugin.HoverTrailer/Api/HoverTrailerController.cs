@@ -608,6 +608,9 @@ public class HoverTrailerController : ControllerBase
         iframe.setAttribute('allowfullscreen', '');
         iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
         iframe.setAttribute('frameborder', '0');
+        // Accessibility: Hide from screen readers and keyboard navigation as this is a visual/audio enhancement
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.setAttribute('tabindex', '-1');
 
         container.appendChild(iframe);
         log('Created YouTube preview iframe with URL:', embedUrl);
@@ -722,6 +725,9 @@ public class HoverTrailerController : ControllerBase
         video.muted = !ENABLE_PREVIEW_AUDIO;
         video.loop = true;
         video.preload = 'metadata';
+        // Accessibility: Hide from screen readers and keyboard navigation
+        video.setAttribute('aria-hidden', 'true');
+        video.setAttribute('tabindex', '-1');
 
         // Set volume based on configuration (0-100 range converted to 0.0-1.0)
         if (ENABLE_PREVIEW_AUDIO) {{
@@ -977,18 +983,18 @@ public class HoverTrailerController : ControllerBase
                     previewToRemove.parentNode.removeChild(previewToRemove);
                 }}
             }}, 300);
-            
+
         }}
     }}
 
     function attachHoverListeners() {{
         const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
         let newCardsCount = 0;
-        
+
         movieCards.forEach(card => {{
             // Skip if this card element already has listeners attached
             if (attachedCards.has(card)) return;
-            
+
             const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
             if (!movieId) {{
                 log('Warning: Found movie card without ID');
@@ -1009,6 +1015,26 @@ public class HoverTrailerController : ControllerBase
             }});
 
             card.addEventListener('mouseleave', () => {{
+                clearTimeout(hoverTimeout);
+                hidePreview();
+            }});
+
+            // Keyboard accessibility: Focus events to mimic hover behavior
+            card.addEventListener('focusin', (e) => {{
+                if (isPlaying) return;
+                // If focus came from inside the card, ignore to avoid resetting timer
+                if (card.contains(e.relatedTarget)) return;
+
+                clearTimeout(hoverTimeout);
+                hoverTimeout = setTimeout(() => {{
+                    showPreview(card, movieId);
+                }}, HOVER_DELAY);
+            }});
+
+            card.addEventListener('focusout', (e) => {{
+                // If focus moved to inside the card, ignore
+                if (card.contains(e.relatedTarget)) return;
+
                 clearTimeout(hoverTimeout);
                 hidePreview();
             }});
@@ -1054,7 +1080,7 @@ public class HoverTrailerController : ControllerBase
             }}
             if (hasMovieCardChanges) break;
         }}
-        
+
         // Only process if movie cards were added
         if (hasMovieCardChanges) {{
             // Debounce to prevent excessive re-attachment
