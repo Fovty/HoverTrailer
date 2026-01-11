@@ -95,6 +95,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnableBackgroundBlur { get; set; } = false;
 
     /// <summary>
+    /// Gets or sets a value indicating whether to show toast notifications for trailer loading status.
+    /// </summary>
+    public bool EnableToastNotifications { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether to enable debug logging.
     /// </summary>
     public bool EnableDebugLogging { get; set; } = true;

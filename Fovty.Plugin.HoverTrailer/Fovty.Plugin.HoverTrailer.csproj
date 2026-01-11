@@ -5,7 +5,7 @@
     <RootNamespace>Fovty.Plugin.HoverTrailer</RootNamespace>
     <AssemblyName>Fovty.Plugin.HoverTrailer</AssemblyName>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <Nullable>enable</Nullable>
 
     <!-- Assembly Information -->
@@ -23,8 +23,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.*-*" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.*-*" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.0" PrivateAssets="All" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.0" PrivateAssets="All" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
       <PrivateAssets>all</PrivateAssets>

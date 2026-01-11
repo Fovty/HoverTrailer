@@ -429,6 +429,7 @@ public class HoverTrailerController : ControllerBase
     const PREVIEW_VOLUME = {config.PreviewVolume};
     const REMOTE_VIDEO_QUALITY = '{config.RemoteVideoQuality}';
     const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
+    const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
 
     let hoverTimeout;
     let currentPreview;
@@ -437,10 +438,116 @@ public class HoverTrailerController : ControllerBase
     let resizeHandler;
     let attachedCards = new WeakSet(); // Track actual card elements that already have listeners
     let mutationDebounce = null;
+    let currentToast = null;
+    let toastTimeout = null;
 
     function log(message, ...args) {{
         if (DEBUG_LOGGING) {{
             console.log('[HoverTrailer]', message, ...args);
+        }}
+    }}
+
+    // Toast notification styles
+    const toastStyles = document.createElement('style');
+    toastStyles.textContent = `
+        .hovertrailer-toast {{
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            z-index: 10001;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }}
+        .hovertrailer-toast.visible {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
+        .hovertrailer-toast.loading {{
+            background: rgba(0, 120, 212, 0.9);
+        }}
+        .hovertrailer-toast.error {{
+            background: rgba(200, 120, 40, 0.9);
+        }}
+        .hovertrailer-toast.success {{
+            background: rgba(40, 167, 69, 0.9);
+        }}
+        .hovertrailer-toast-spinner {{
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: hovertrailer-spin 0.8s linear infinite;
+        }}
+        @keyframes hovertrailer-spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+    `;
+    document.head.appendChild(toastStyles);
+
+    function showToast(message, type = 'loading', duration = 0) {{
+        if (!ENABLE_TOAST_NOTIFICATIONS) return;
+
+        hideToast();
+
+        const toast = document.createElement('div');
+        toast.className = `hovertrailer-toast ${{type}}`;
+
+        if (type === 'loading') {{
+            const spinner = document.createElement('div');
+            spinner.className = 'hovertrailer-toast-spinner';
+            toast.appendChild(spinner);
+        }}
+
+        const text = document.createElement('span');
+        text.textContent = message;
+        toast.appendChild(text);
+
+        document.body.appendChild(toast);
+        currentToast = toast;
+
+        // Trigger reflow for animation
+        toast.offsetHeight;
+        toast.classList.add('visible');
+
+        log('Toast shown:', message, type);
+
+        if (duration > 0) {{
+            toastTimeout = setTimeout(() => {{
+                hideToast();
+            }}, duration);
+        }}
+    }}
+
+    function hideToast() {{
+        if (toastTimeout) {{
+            clearTimeout(toastTimeout);
+            toastTimeout = null;
+        }}
+        if (currentToast) {{
+            const toastToRemove = currentToast;
+            currentToast = null;
+            toastToRemove.classList.remove('visible');
+            setTimeout(() => {{
+                if (toastToRemove.parentNode) {{
+                    toastToRemove.parentNode.removeChild(toastToRemove);
+                }}
+            }}, 300);
+            log('Toast hidden');
         }}
     }}
 
@@ -739,15 +846,24 @@ public class HoverTrailerController : ControllerBase
 
         log('Showing preview for movie:', movieId);
 
+        // Show loading toast
+        showToast('Loading trailer...', 'loading');
+
         // Get trailer info from API
         fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{movieId}}`)
             .then(response => {{
                 if (!response.ok) {{
+                    if (response.status === 404) {{
+                        throw new Error('NO_TRAILER');
+                    }}
                     throw new Error('Trailer not found');
                 }}
                 return response.json();
             }})
             .then(trailerInfo => {{
+                // Hide loading toast when trailer info received
+                hideToast();
+
                 // Check if preview was cancelled during fetch (another hover started)
                 if (currentPreview || isPlaying) {{
                     log('Preview cancelled during fetch - another preview is active');
@@ -934,10 +1050,18 @@ public class HoverTrailerController : ControllerBase
             }})
             .catch(error => {{
                 log('Error loading trailer:', error);
+                if (error.message === 'NO_TRAILER') {{
+                    showToast('No trailer found', 'error', 3000);
+                }} else {{
+                    showToast('Error loading trailer', 'error', 3000);
+                }}
             }});
     }}
 
     function hidePreview() {{
+        // Always hide toast when hiding preview
+        hideToast();
+
         if (currentPreview) {{
             log('Hiding preview');
             const previewToRemove = currentPreview;
@@ -977,18 +1101,18 @@ public class HoverTrailerController : ControllerBase
                     previewToRemove.parentNode.removeChild(previewToRemove);
                 }}
             }}, 300);
-            
+
         }}
     }}
 
     function attachHoverListeners() {{
         const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
         let newCardsCount = 0;
-        
+
         movieCards.forEach(card => {{
             // Skip if this card element already has listeners attached
             if (attachedCards.has(card)) return;
-            
+
             const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
             if (!movieId) {{
                 log('Warning: Found movie card without ID');
@@ -1054,7 +1178,7 @@ public class HoverTrailerController : ControllerBase
             }}
             if (hasMovieCardChanges) break;
         }}
-        
+
         // Only process if movie cards were added
         if (hasMovieCardChanges) {{
             // Debounce to prevent excessive re-attachment
