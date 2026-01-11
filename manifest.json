@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.2.0",
+        "changelog": "\u2022 Add Plugin Preview to README by @Fovty in https://github.com/Fovty/HoverTrailer/pull/8",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.2.0/HoverTrailer-0.2.2.0-server.zip",
+        "checksum": "7dbff2204c2448de19ecf7e5f7692265",
+        "timestamp": "2026-01-11T21:10:38Z"
+      },
+      {
         "version": "0.2.1.1",
         "changelog": "Release version 0.2.1.1",
         "targetAbi": "10.11.0.0",
