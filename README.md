@@ -5,7 +5,7 @@
         <img alt="HoverTrailer Logo" src="logo/logo.png" width="450"/>
     </p>
     <p>
-        A modern Netflix-style hover trailer preview plugin for Jellyfin that displays movie trailers on hover.
+        Bring your library to life: Instant trailer playback on hover for Jellyfin.
     </p>
 
 [![Build](https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml/badge.svg)](https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml)
