@@ -113,36 +113,36 @@ public class HoverTrailerController : ControllerBase
     }
 
     /// <summary>
-    /// Gets trailer information for a specific movie.
+    /// Gets trailer information for a specific item (Movie or Series).
     /// </summary>
-    /// <param name="movieId">The movie ID.</param>
+    /// <param name="itemId">The item ID.</param>
     /// <returns>The trailer information.</returns>
-    [HttpGet("TrailerInfo/{movieId}")]
+    [HttpGet("TrailerInfo/{itemId}")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public ActionResult<TrailerInfo> GetTrailerInfo([FromRoute] Guid movieId)
+    public ActionResult<TrailerInfo> GetTrailerInfo([FromRoute] Guid itemId)
     {
         var requestId = GenerateRequestId();
 
         try
         {
-            if (movieId == Guid.Empty)
+            if (itemId == Guid.Empty)
             {
-                LoggingHelper.LogWarning(_logger, "Invalid movie ID provided: {MovieId}", movieId);
-                var invalidError = new ErrorResponse("INVALID_ARGUMENT", "Movie ID cannot be empty")
+                LoggingHelper.LogWarning(_logger, "Invalid item ID provided: {ItemId}", itemId);
+                var invalidError = new ErrorResponse("INVALID_ARGUMENT", "Item ID cannot be empty")
                 {
                     RequestId = requestId
                 };
                 return BadRequest(invalidError);
             }
 
-            var movie = _libraryManager.GetItemById(movieId) as Movie;
-            if (movie == null)
+            var item = _libraryManager.GetItemById(itemId);
+            if (item == null)
             {
-                LoggingHelper.LogDebug(_logger, "Movie not found with ID: {MovieId}", movieId);
-                var notFoundError = new ErrorResponse("MOVIE_NOT_FOUND", "Movie not found", $"No movie found with ID: {movieId}")
+                LoggingHelper.LogDebug(_logger, "Item not found with ID: {ItemId}", itemId);
+                var notFoundError = new ErrorResponse("ITEM_NOT_FOUND", "Item not found", $"No item found with ID: {itemId}")
                 {
                     RequestId = requestId
                 };
@@ -150,9 +150,9 @@ public class HoverTrailerController : ControllerBase
             }
 
             // Multi-source trailer detection with priority: Local → Remote → Downloaded
-            LoggingHelper.LogDebug(_logger, "Starting multi-source trailer detection for movie: {MovieName} (ID: {MovieId})", movie.Name, movieId);
-            LoggingHelper.LogDebug(_logger, "Movie path: {MoviePath}", movie.Path ?? "null");
-            LoggingHelper.LogDebug(_logger, "Movie directory: {MovieDirectory}", movie.Path != null ? System.IO.Path.GetDirectoryName(movie.Path) ?? "null" : "null");
+            LoggingHelper.LogDebug(_logger, "Starting multi-source trailer detection for item: {ItemName} (ID: {ItemId})", item.Name, itemId);
+            LoggingHelper.LogDebug(_logger, "Item path: {ItemPath}", item.Path ?? "null");
+            LoggingHelper.LogDebug(_logger, "Item directory: {ItemDirectory}", item.Path != null ? System.IO.Path.GetDirectoryName(item.Path) ?? "null" : "null");
 
             TrailerInfo? trailerInfo = null;
 
@@ -160,19 +160,19 @@ public class HoverTrailerController : ControllerBase
             LoggingHelper.LogDebug(_logger, "Step 1: Checking for local trailers...");
 
             IEnumerable<BaseItem> localTrailers;
-            if (movie is IHasTrailers hasTrailers)
+            if (item is IHasTrailers hasTrailers)
             {
                 // Use LocalTrailers property which matches Jellyfin's native trailer selection
                 localTrailers = hasTrailers.LocalTrailers;
-                LoggingHelper.LogDebug(_logger, "Using LocalTrailers property: Found {LocalTrailerCount} local trailers for movie: {MovieName}",
-                    localTrailers.Count(), movie.Name);
+                LoggingHelper.LogDebug(_logger, "Using LocalTrailers property: Found {LocalTrailerCount} local trailers for item: {ItemName}",
+                    localTrailers.Count(), item.Name);
             }
             else
             {
-                // Fallback to GetExtras if movie doesn't implement IHasTrailers
-                localTrailers = movie.GetExtras(new[] { ExtraType.Trailer });
-                LoggingHelper.LogDebug(_logger, "Using GetExtras fallback: Found {LocalTrailerCount} local trailers for movie: {MovieName}",
-                    localTrailers.Count(), movie.Name);
+                // Fallback to GetExtras if item doesn't implement IHasTrailers
+                localTrailers = item.GetExtras(new[] { ExtraType.Trailer });
+                LoggingHelper.LogDebug(_logger, "Using GetExtras fallback: Found {LocalTrailerCount} local trailers for item: {ItemName}",
+                    localTrailers.Count(), item.Name);
             }
 
             // Log detailed information about each local trailer found
@@ -188,7 +188,7 @@ public class HoverTrailerController : ControllerBase
 
             if (localTrailer != null)
             {
-                LoggingHelper.LogDebug(_logger, "Found local trailer for movie: {MovieName} (ID: {MovieId})", movie.Name, movieId);
+                LoggingHelper.LogDebug(_logger, "Found local trailer for item: {ItemName} (ID: {ItemId})", item.Name, itemId);
                 LoggingHelper.LogDebug(_logger, "Local trailer details - ID: {TrailerId}, Name: {TrailerName}, Path: {TrailerPath}",
                     localTrailer.Id, localTrailer.Name, localTrailer.Path);
 
@@ -204,23 +204,23 @@ public class HoverTrailerController : ControllerBase
                     Source = "Local File"
                 };
 
-                LoggingHelper.LogDebug(_logger, "Successfully created local trailer info for movie: {MovieName} (ID: {MovieId})",
-                    movie.Name, movieId);
+                LoggingHelper.LogDebug(_logger, "Successfully created local trailer info for item: {ItemName} (ID: {ItemId})",
+                    item.Name, itemId);
                 return Ok(trailerInfo);
             }
 
             // Step 2: Check for remote trailers if no local trailer found
             LoggingHelper.LogDebug(_logger, "Step 2: No local trailer found, checking for remote trailers...");
 
-            if (movie.RemoteTrailers?.Any() == true)
+            if (item.RemoteTrailers?.Any() == true)
             {
-                var remoteTrailer = movie.RemoteTrailers.LastOrDefault();
-                LoggingHelper.LogDebug(_logger, "Found remote trailer for movie: {MovieName} (ID: {MovieId})", movie.Name, movieId);
+                var remoteTrailer = item.RemoteTrailers.LastOrDefault();
+                LoggingHelper.LogDebug(_logger, "Found remote trailer for item: {ItemName} (ID: {ItemId})", item.Name, itemId);
 
                 trailerInfo = new TrailerInfo
                 {
-                    Id = movieId, // Use movie ID since remote trailers don't have their own ID
-                    Name = remoteTrailer.Name ?? $"{movie.Name} - Trailer",
+                    Id = itemId, // Use item ID since remote trailers don't have their own ID
+                    Name = remoteTrailer.Name ?? $"{item.Name} - Trailer",
                     Path = remoteTrailer.Url,
                     RunTimeTicks = null, // Remote trailers typically don't have runtime info
                     HasSubtitles = false, // Remote trailers typically don't have subtitle info
@@ -229,21 +229,21 @@ public class HoverTrailerController : ControllerBase
                     Source = GetTrailerSource(remoteTrailer.Url)
                 };
 
-                LoggingHelper.LogDebug(_logger, "Successfully created remote trailer info for movie: {MovieName} (ID: {MovieId}), Source: {Source}",
-                    movie.Name, movieId, trailerInfo.Source);
+                LoggingHelper.LogDebug(_logger, "Successfully created remote trailer info for item: {ItemName} (ID: {ItemId}), Source: {Source}",
+                    item.Name, itemId, trailerInfo.Source);
                 return Ok(trailerInfo);
             }
 
             // Step 3: No trailers found (local or remote)
-            LoggingHelper.LogDebug(_logger, "No local or remote trailers found for movie: {MovieName} (ID: {MovieId})", movie.Name, movieId);
+            LoggingHelper.LogDebug(_logger, "No local or remote trailers found for item: {ItemName} (ID: {ItemId})", item.Name, itemId);
 
-            // Also check if there are any files in the movie directory that might be trailers (for debugging)
-            var movieDir = System.IO.Path.GetDirectoryName(movie.Path);
-            if (!string.IsNullOrEmpty(movieDir) && System.IO.Directory.Exists(movieDir))
+            // Also check if there are any files in the item directory that might be trailers (for debugging)
+            var itemDir = System.IO.Path.GetDirectoryName(item.Path);
+            if (!string.IsNullOrEmpty(itemDir) && System.IO.Directory.Exists(itemDir))
             {
-                var files = System.IO.Directory.GetFiles(movieDir, "*", System.IO.SearchOption.TopDirectoryOnly);
-                LoggingHelper.LogDebug(_logger, "Files in movie directory {MovieDir}: {Files}",
-                    movieDir, string.Join(", ", files.Select(System.IO.Path.GetFileName)));
+                var files = System.IO.Directory.GetFiles(itemDir, "*", System.IO.SearchOption.TopDirectoryOnly);
+                LoggingHelper.LogDebug(_logger, "Files in item directory {ItemDir}: {Files}",
+                    itemDir, string.Join(", ", files.Select(System.IO.Path.GetFileName)));
 
                 // Look for potential trailer files
                 var potentialTrailers = files.Where(f =>
@@ -263,8 +263,8 @@ public class HoverTrailerController : ControllerBase
                 }
             }
 
-            var error = new ErrorResponse("TRAILER_NOT_FOUND", "No trailer found for this movie",
-                $"Movie '{movie.Name}' does not have any local or remote trailers available")
+            var error = new ErrorResponse("TRAILER_NOT_FOUND", "No trailer found for this item",
+                $"Item '{item.Name}' does not have any local or remote trailers available")
             {
                 RequestId = requestId
             };
@@ -272,13 +272,13 @@ public class HoverTrailerController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            LoggingHelper.LogError(_logger, ex, "Unauthorized access getting trailer info for movie {MovieId}", movieId);
+            LoggingHelper.LogError(_logger, ex, "Unauthorized access getting trailer info for item {ItemId}", itemId);
             var error = ErrorResponse.FromException(ex, requestId);
             return StatusCode(403, error);
         }
         catch (Exception ex)
         {
-            LoggingHelper.LogError(_logger, ex, "Unexpected error getting trailer info for movie {MovieId}", movieId);
+            LoggingHelper.LogError(_logger, ex, "Unexpected error getting trailer info for item {ItemId}", itemId);
             var error = ErrorResponse.FromException(ex, requestId);
             return StatusCode(500, error);
         }
@@ -841,16 +841,16 @@ public class HoverTrailerController : ControllerBase
         return container;
     }}
 
-    function showPreview(element, movieId) {{
+    function showPreview(element, itemId) {{
         if (currentPreview || isPlaying) return;
 
-        log('Showing preview for movie:', movieId);
+        log('Showing preview for item:', itemId);
 
         // Show loading toast
         showToast('Loading trailer...', 'loading');
 
         // Get trailer info from API
-        fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{movieId}}`)
+        fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{itemId}}`)
             .then(response => {{
                 if (!response.ok) {{
                     if (response.status === 404) {{
@@ -1106,16 +1106,16 @@ public class HoverTrailerController : ControllerBase
     }}
 
     function attachHoverListeners() {{
-        const movieCards = document.querySelectorAll('[data-type=""Movie""], .card[data-itemtype=""Movie""]');
+        const itemCards = document.querySelectorAll('[data-type=""Movie""], [data-type=""Series""], .card[data-itemtype=""Movie""], .card[data-itemtype=""Series""]');
         let newCardsCount = 0;
 
-        movieCards.forEach(card => {{
+        itemCards.forEach(card => {{
             // Skip if this card element already has listeners attached
             if (attachedCards.has(card)) return;
 
-            const movieId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
-            if (!movieId) {{
-                log('Warning: Found movie card without ID');
+            const itemId = card.getAttribute('data-id') || card.getAttribute('data-itemid');
+            if (!itemId) {{
+                log('Warning: Found card without ID');
                 return;
             }}
 
@@ -1128,7 +1128,7 @@ public class HoverTrailerController : ControllerBase
 
                 clearTimeout(hoverTimeout);
                 hoverTimeout = setTimeout(() => {{
-                    showPreview(card, movieId);
+                    showPreview(card, itemId);
                 }}, HOVER_DELAY);
             }});
 
@@ -1145,7 +1145,7 @@ public class HoverTrailerController : ControllerBase
         }});
 
         if (newCardsCount > 0) {{
-            console.log(`[HoverTrailer] Attached hover listeners to ${{newCardsCount}} new movie cards`);
+            console.log(`[HoverTrailer] Attached hover listeners to ${{newCardsCount}} new cards`);
         }}
     }}
 
@@ -1158,29 +1158,29 @@ public class HoverTrailerController : ControllerBase
 
     // Re-attach listeners when navigation occurs (debounced)
     const observer = new MutationObserver((mutations) => {{
-        // Check if any mutations added movie cards
-        let hasMovieCardChanges = false;
+        // Check if any mutations added item cards (Movie or Series)
+        let hasItemCardChanges = false;
         for (const mutation of mutations) {{
             if (mutation.addedNodes.length > 0) {{
                 for (const node of mutation.addedNodes) {{
                     if (node.nodeType === 1) {{ // Element node
-                        // Check if it's a movie card or contains movie cards
-                        if (node.matches && (node.matches('[data-type=""Movie""]') || node.matches('.card[data-itemtype=""Movie""]'))) {{
-                            hasMovieCardChanges = true;
+                        // Check if it's an item card or contains item cards
+                        if (node.matches && (node.matches('[data-type=""Movie""], [data-type=""Series""]') || node.matches('.card[data-itemtype=""Movie""], .card[data-itemtype=""Series""]'))) {{
+                            hasItemCardChanges = true;
                             break;
                         }}
-                        if (node.querySelector && node.querySelector('[data-type=""Movie""], .card[data-itemtype=""Movie""]')) {{
-                            hasMovieCardChanges = true;
+                        if (node.querySelector && node.querySelector('[data-type=""Movie""], [data-type=""Series""], .card[data-itemtype=""Movie""], .card[data-itemtype=""Series""]')) {{
+                            hasItemCardChanges = true;
                             break;
                         }}
                     }}
                 }}
             }}
-            if (hasMovieCardChanges) break;
+            if (hasItemCardChanges) break;
         }}
 
-        // Only process if movie cards were added
-        if (hasMovieCardChanges) {{
+        // Only process if item cards were added
+        if (hasItemCardChanges) {{
             // Debounce to prevent excessive re-attachment
             clearTimeout(mutationDebounce);
             mutationDebounce = setTimeout(() => {{
