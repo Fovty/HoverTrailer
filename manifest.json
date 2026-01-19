@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.3.0",
+        "changelog": "\u2022 fix: Add Series hover trailer support by @Fovty in https://github.com/Fovty/HoverTrailer/pull/13",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.3.0/HoverTrailer-0.2.3.0-server.zip",
+        "checksum": "db46e7ec4568f59f28ac0f808bd47ee8",
+        "timestamp": "2026-01-19T13:03:58Z"
+      },
+      {
         "version": "0.2.2.0",
         "changelog": "\u2022 Add Plugin Preview to README by @Fovty in https://github.com/Fovty/HoverTrailer/pull/8",
         "targetAbi": "10.11.0.0",
