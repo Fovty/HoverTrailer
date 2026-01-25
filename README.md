@@ -11,7 +11,7 @@
 [![Build](https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml/badge.svg)](https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml)
 [![CodeQL](https://github.com/Fovty/HoverTrailer/actions/workflows/codeql.yml/badge.svg)](https://github.com/Fovty/HoverTrailer/actions/workflows/codeql.yml)
 <a href="https://github.com/Fovty/HoverTrailer/releases">
-<img alt="Total GitHub Downloads" src="https://img.shields.io/github/downloads/Fovty/HoverTrailer/total?label=github%20downloads"/>
+<img alt="Total Downloads" src="https://img.shields.io/github/downloads/Fovty/HoverTrailer/total"/>
 </a>
 </div>
 
@@ -214,3 +214,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Note**: This plugin is not officially affiliated with Jellyfin or Netflix. It's a community-developed enhancement for the Jellyfin media server.
+
