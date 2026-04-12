@@ -70,20 +70,45 @@ jobs:
             console.log('No previous release found, this will be the first release');
           }
 
-          const { data } = await github.rest.repos.generateReleaseNotes({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            tag_name: `v${process.env.VERSION}`,
-            previous_tag_name: previousTagName
-          });
+          // Try GitHub's auto-generated release notes (works best with PR-based workflows)
+          let changelog = '';
+          try {
+            const { data } = await github.rest.repos.generateReleaseNotes({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${process.env.VERSION}`,
+              previous_tag_name: previousTagName
+            });
 
-          // Extract and clean the changelog for manifest
-          const changelog = data.body
-            .replace(/## What's Changed\n/, '')
-            .replace(/\*\*Full Changelog.*/, '')
-            .replace(/^(\* )/gm, '• ')
-            .trim()
-            .substring(0, 200);
+            changelog = data.body
+              .replace(/## What's Changed\n/, '')
+              .replace(/\*\*Full Changelog.*/, '')
+              .replace(/^(\* )/gm, '• ')
+              .trim()
+              .substring(0, 200);
+          } catch (error) {
+            console.log('Failed to generate release notes from API:', error.message);
+          }
+
+          // Fallback: generate from commit log when no PRs are found
+          if (!changelog && previousTagName) {
+            try {
+              const { data: comparison } = await github.rest.repos.compareCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                base: previousTagName,
+                head: `v${process.env.VERSION}`
+              });
+              changelog = comparison.commits
+                .map(c => `• ${c.commit.message.split('\n')[0]}`)
+                .filter(m => !m.includes('Update manifest and version'))
+                .reverse()
+                .join('\n')
+                .substring(0, 200);
+            } catch (error) {
+              console.log('Failed to generate changelog from commits:', error.message);
+            }
+          }
 
           core.exportVariable('CHANGELOG_ENTRY', changelog || `Release version ${process.env.VERSION}`);
 
@@ -147,16 +172,7 @@ jobs:
 
           ${{ env.CHANGELOG_ENTRY }}
 
-          ## Installation
-
-          1. Download the `HoverTrailer-${{ env.VERSION }}-server.zip` file
-          2. Extract to your Jellyfin plugins directory
-          3. Restart Jellyfin server
-          4. Enable the plugin in Jellyfin settings
-
-          ## Checksums
-
-          - **MD5**: `${{ env.CHECKSUM }}`
+          **Checksum (MD5):** `${{ env.CHECKSUM }}`
         files: |
           HoverTrailer-${{ env.VERSION }}-server.zip
         draft: false
