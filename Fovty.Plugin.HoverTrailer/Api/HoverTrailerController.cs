@@ -234,7 +234,32 @@ public class HoverTrailerController : ControllerBase
                 return Ok(trailerInfo);
             }
 
-            // Step 3: No trailers found (local or remote)
+            // Step 3: Check for theme videos as fallback
+            var pluginConfig = Plugin.Instance?.Configuration;
+            if (pluginConfig?.EnableThemeVideoFallback == true)
+            {
+                LoggingHelper.LogDebug(_logger, "Step 3: No trailer found, checking for theme video fallback...");
+                var themeVideos = item.GetThemeVideos();
+                var themeVideo = themeVideos.FirstOrDefault();
+                if (themeVideo != null)
+                {
+                    LoggingHelper.LogDebug(_logger, "Found theme video for item: {ItemName} (ID: {ItemId})", item.Name, itemId);
+                    trailerInfo = new TrailerInfo
+                    {
+                        Id = themeVideo.Id,
+                        Name = themeVideo.Name ?? $"{item.Name} - Theme",
+                        Path = themeVideo.Path,
+                        RunTimeTicks = themeVideo.RunTimeTicks,
+                        HasSubtitles = false,
+                        TrailerType = TrailerType.ThemeVideo,
+                        IsRemote = false,
+                        Source = "Theme Video"
+                    };
+                    return Ok(trailerInfo);
+                }
+            }
+
+            // Step 4: No trailers found (local, remote, or theme video)
             LoggingHelper.LogDebug(_logger, "No local or remote trailers found for item: {ItemName} (ID: {ItemId})", item.Name, itemId);
 
             // Also check if there are any files in the item directory that might be trailers (for debugging)
@@ -430,6 +455,7 @@ public class HoverTrailerController : ControllerBase
     const REMOTE_VIDEO_QUALITY = '{config.RemoteVideoQuality}';
     const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
+    const ENABLE_THEME_VIDEO_FALLBACK = {config.EnableThemeVideoFallback.ToString().ToLower()};
 
     let hoverTimeout;
     let currentPreview;
@@ -1278,7 +1304,12 @@ public enum TrailerType
     /// <summary>
     /// Trailer downloaded via yt-dlp.
     /// </summary>
-    Downloaded
+    Downloaded,
+
+    /// <summary>
+    /// Theme video used as trailer fallback.
+    /// </summary>
+    ThemeVideo
 }
 
 /// <summary>

@@ -130,6 +130,14 @@
                                 <input id="PreviewDurationMs" name="PreviewDurationMs" type="number" min="5000" max="60000" is="emby-input" />
                                 <div class="fieldDescription">How long to show the preview (5000-60000 milliseconds)</div>
                             </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableThemeVideoFallback" name="EnableThemeVideoFallback" type="checkbox" is="emby-checkbox" />
+                                    <span>Enable Theme Video Fallback</span>
+                                </label>
+                                <div class="fieldDescription">Play the item's theme video when no trailer is available</div>
+                            </div>
                         </div>
                     </fieldset>
 
@@ -307,6 +315,9 @@
                     updatePositioningModeVisibility();
                     updateSizingModeVisibility();
 
+                    // Trailer Fallback Settings
+                    document.querySelector('#EnableThemeVideoFallback').checked = config.EnableThemeVideoFallback || false;
+
                     // Debug Settings
                     document.querySelector('#EnableDebugLogging').checked = config.EnableDebugLogging || false;
 
@@ -341,6 +352,9 @@
                     config.RemoteVideoQuality = document.querySelector('#RemoteVideoQuality').value || 'adaptive';
                     config.EnableBackgroundBlur = document.querySelector('#EnableBackgroundBlur').checked;
                     config.EnableToastNotifications = document.querySelector('#EnableToastNotifications').checked;
+
+                    // Trailer Fallback Settings
+                    config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;
 
                     // Debug Settings
                     config.EnableDebugLogging = document.querySelector('#EnableDebugLogging').checked;

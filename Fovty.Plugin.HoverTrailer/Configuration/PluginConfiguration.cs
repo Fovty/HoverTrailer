@@ -104,6 +104,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool EnableDebugLogging { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether to fall back to the item's theme video when no trailer is available.
+    /// </summary>
+    public bool EnableThemeVideoFallback { get; set; } = false;
+
 
     /// <summary>
     /// Validates the current configuration and throws ConfigurationException if invalid.
