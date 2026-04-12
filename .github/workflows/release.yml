@@ -83,7 +83,7 @@ jobs:
             changelog = data.body
               .replace(/## What's Changed\n/, '')
               .replace(/\*\*Full Changelog.*/, '')
-              .replace(/^(\* )/gm, '• ')
+              .replace(/^(\* )/gm, '- ')
               .trim()
               .substring(0, 200);
           } catch (error) {
@@ -100,7 +100,7 @@ jobs:
                 head: `v${process.env.VERSION}`
               });
               changelog = comparison.commits
-                .map(c => `• ${c.commit.message.split('\n')[0]}`)
+                .map(c => `- ${c.commit.message.split('\n')[0]}`)
                 .filter(m => !m.includes('Update manifest and version'))
                 .reverse()
                 .join('\n')
