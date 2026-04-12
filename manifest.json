@@ -10,7 +10,7 @@
     "versions": [
       {
         "version": "0.2.4.0",
-        "changelog": "Release version 0.2.4.0",
+        "changelog": "\u2022 feat: Add theme video fallback when no trailer available (closes #14)\n\u2022 fix: Resolve UI unresponsiveness after trailer hover preview",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.4.0/HoverTrailer-0.2.4.0-server.zip",
         "checksum": "2bae8be3aee73c2aedc12d8306324f58",
