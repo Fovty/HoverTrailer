@@ -440,6 +440,8 @@ public class HoverTrailerController : ControllerBase
     let mutationDebounce = null;
     let currentToast = null;
     let toastTimeout = null;
+    let previewGeneration = 0;
+    let currentAbortController = null;
 
     function log(message, ...args) {{
         if (DEBUG_LOGGING) {{
@@ -844,13 +846,18 @@ public class HoverTrailerController : ControllerBase
     function showPreview(element, itemId) {{
         if (currentPreview || isPlaying) return;
 
+        const myGeneration = ++previewGeneration;
+        const abortController = new AbortController();
+        if (currentAbortController) {{ currentAbortController.abort(); }}
+        currentAbortController = abortController;
+
         log('Showing preview for item:', itemId);
 
         // Show loading toast
         showToast('Loading trailer...', 'loading');
 
         // Get trailer info from API
-        fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{itemId}}`)
+        fetch(`${{API_BASE_URL}}/HoverTrailer/TrailerInfo/${{itemId}}`, {{ signal: abortController.signal }})
             .then(response => {{
                 if (!response.ok) {{
                     if (response.status === 404) {{
@@ -864,9 +871,9 @@ public class HoverTrailerController : ControllerBase
                 // Hide loading toast when trailer info received
                 hideToast();
 
-                // Check if preview was cancelled during fetch (another hover started)
-                if (currentPreview || isPlaying) {{
-                    log('Preview cancelled during fetch - another preview is active');
+                // Check if preview was cancelled during fetch
+                if (myGeneration !== previewGeneration || currentPreview || isPlaying) {{
+                    log('Preview cancelled during fetch');
                     return;
                 }}
 
@@ -1049,6 +1056,7 @@ public class HoverTrailerController : ControllerBase
                 log('Preview created for:', trailerInfo.Name);
             }})
             .catch(error => {{
+                if (error.name === 'AbortError') return;
                 log('Error loading trailer:', error);
                 if (error.message === 'NO_TRAILER') {{
                     showToast('No trailer found', 'error', 3000);
@@ -1059,8 +1067,18 @@ public class HoverTrailerController : ControllerBase
     }}
 
     function hidePreview() {{
+        // Invalidate any in-flight fetch and abort it
+        previewGeneration++;
+        if (currentAbortController) {{
+            currentAbortController.abort();
+            currentAbortController = null;
+        }}
+
         // Always hide toast when hiding preview
         hideToast();
+
+        // Always remove any leaked backdrop
+        removeBackgroundBlur();
 
         if (currentPreview) {{
             log('Hiding preview');
@@ -1083,7 +1101,6 @@ public class HoverTrailerController : ControllerBase
 
             // Fade out animation
             currentPreview.style.opacity = '0';
-            removeBackgroundBlur();
 
             // Clear references immediately to prevent race conditions
             currentPreview = null;
