@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.5.0",
+        "changelog": "- feat: Add hover progress indicator on cards during delay\n- fix: Use markdown dash format for changelogs\n- fix: Update v0.2.4.0 changelog in manifest\n- fix: Improve release changelog generation and t",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.5.0/HoverTrailer-0.2.5.0-server.zip",
+        "checksum": "e0a15caee888ee3882df78c474d7fe0b",
+        "timestamp": "2026-04-13T11:13:41Z"
+      },
+      {
         "version": "0.2.4.0",
         "changelog": "- feat: Add theme video fallback when no trailer available (closes #14)\n - fix: Resolve UI unresponsiveness after trailer hover preview",
         "targetAbi": "10.11.0.0",
