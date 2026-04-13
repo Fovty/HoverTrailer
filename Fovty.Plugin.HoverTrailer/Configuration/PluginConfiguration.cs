@@ -109,6 +109,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool EnableThemeVideoFallback { get; set; } = false;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether to show a progress indicator on the card during hover delay.
+    /// </summary>
+    public bool EnableHoverProgressIndicator { get; set; } = true;
+
 
     /// <summary>
     /// Validates the current configuration and throws ConfigurationException if invalid.

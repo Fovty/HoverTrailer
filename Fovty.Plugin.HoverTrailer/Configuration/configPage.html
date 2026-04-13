@@ -138,6 +138,14 @@
                                 </label>
                                 <div class="fieldDescription">Play the item's theme video when no trailer is available</div>
                             </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableHoverProgressIndicator" name="EnableHoverProgressIndicator" type="checkbox" is="emby-checkbox" />
+                                    <span>Enable Hover Progress Indicator</span>
+                                </label>
+                                <div class="fieldDescription">Show a progress bar on the card indicating when the trailer will start playing</div>
+                            </div>
                         </div>
                     </fieldset>
 
@@ -317,6 +325,7 @@
 
                     // Trailer Fallback Settings
                     document.querySelector('#EnableThemeVideoFallback').checked = config.EnableThemeVideoFallback || false;
+                    document.querySelector('#EnableHoverProgressIndicator').checked = config.EnableHoverProgressIndicator !== false;
 
                     // Debug Settings
                     document.querySelector('#EnableDebugLogging').checked = config.EnableDebugLogging || false;
@@ -355,6 +364,7 @@
 
                     // Trailer Fallback Settings
                     config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;
+                    config.EnableHoverProgressIndicator = document.querySelector('#EnableHoverProgressIndicator').checked;
 
                     // Debug Settings
                     config.EnableDebugLogging = document.querySelector('#EnableDebugLogging').checked;

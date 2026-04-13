@@ -456,6 +456,7 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
     const ENABLE_THEME_VIDEO_FALLBACK = {config.EnableThemeVideoFallback.ToString().ToLower()};
+    const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
 
     let hoverTimeout;
     let currentPreview;
@@ -526,6 +527,28 @@ public class HoverTrailerController : ControllerBase
         }}
     `;
     document.head.appendChild(toastStyles);
+
+    // Progress indicator styles
+    const progressStyles = document.createElement('style');
+    progressStyles.textContent = `
+        .hovertrailer-progress {{
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00a4dc, #00d4ff);
+            border-radius: 0 2px 0 0;
+            z-index: 1000;
+            width: 0%;
+            animation: hovertrailer-progress-fill linear forwards;
+            box-shadow: 0 0 6px rgba(0, 164, 220, 0.6);
+        }}
+        @keyframes hovertrailer-progress-fill {{
+            from {{ width: 0%; }}
+            to {{ width: 100%; }}
+        }}
+    `;
+    document.head.appendChild(progressStyles);
 
     function showToast(message, type = 'loading', duration = 0) {{
         if (!ENABLE_TOAST_NOTIFICATIONS) return;
@@ -624,6 +647,33 @@ public class HoverTrailerController : ControllerBase
                 }}
             }}, 300);
             log('Background blur removed');
+        }}
+    }}
+
+    function showProgressIndicator(card) {{
+        if (!ENABLE_HOVER_PROGRESS_INDICATOR) return;
+        const cardPosition = window.getComputedStyle(card).position;
+        if (cardPosition === 'static') {{
+            card.style.position = 'relative';
+            card.dataset.hovertrailerPositionSet = 'true';
+        }}
+        const bar = document.createElement('div');
+        bar.className = 'hovertrailer-progress';
+        bar.style.animationDuration = `${{HOVER_DELAY}}ms`;
+        card.appendChild(bar);
+        log('Progress indicator shown on card');
+    }}
+
+    function hideProgressIndicator(card) {{
+        if (!card) return;
+        const bar = card.querySelector('.hovertrailer-progress');
+        if (bar) {{
+            bar.parentNode.removeChild(bar);
+            log('Progress indicator hidden');
+        }}
+        if (card.dataset.hovertrailerPositionSet) {{
+            card.style.position = '';
+            delete card.dataset.hovertrailerPositionSet;
         }}
     }}
 
@@ -871,6 +921,8 @@ public class HoverTrailerController : ControllerBase
 
     function showPreview(element, itemId) {{
         if (currentPreview || isPlaying) return;
+
+        hideProgressIndicator(currentCardElement || element);
 
         const myGeneration = ++previewGeneration;
         const abortController = new AbortController();
@@ -1173,15 +1225,18 @@ public class HoverTrailerController : ControllerBase
                 hoverTimeout = setTimeout(() => {{
                     showPreview(card, itemId);
                 }}, HOVER_DELAY);
+                showProgressIndicator(card);
             }});
 
             card.addEventListener('mouseleave', () => {{
                 clearTimeout(hoverTimeout);
+                hideProgressIndicator(card);
                 hidePreview();
             }});
 
             card.addEventListener('click', () => {{
                 isPlaying = true;
+                hideProgressIndicator(card);
                 hidePreview();
                 setTimeout(() => {{ isPlaying = false; }}, 2000);
             }});
