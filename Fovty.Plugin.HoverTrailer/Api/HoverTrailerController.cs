@@ -458,6 +458,17 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_THEME_VIDEO_FALLBACK = {config.EnableThemeVideoFallback.ToString().ToLower()};
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
 
+    // Disable on touch devices: hover UX doesn't apply and mobile WebViews
+    // exhibit freezes around iframe cleanup (issue #15).
+    const isTouchDevice =
+        /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
+        navigator.maxTouchPoints > 1 ||
+        window.matchMedia('(hover: none)').matches;
+    if (isTouchDevice) {{
+        console.log('[HoverTrailer] Touch device detected, plugin disabled');
+        return;
+    }}
+
     let hoverTimeout;
     let currentPreview;
     let currentCardElement;
@@ -1173,8 +1184,11 @@ public class HoverTrailerController : ControllerBase
             }}
 
             if (iframeToStop) {{
-                log('Stopping iframe (YouTube)');
-                iframeToStop.src = 'about:blank';
+                log('Removing iframe (YouTube)');
+                // Don't set iframe.src='about:blank' — iframes are browsing
+                // contexts, so that navigation pollutes the parent's session
+                // history and breaks the browser Back button (issue #15).
+                iframeToStop.remove();
             }}
 
             // Fade out animation
