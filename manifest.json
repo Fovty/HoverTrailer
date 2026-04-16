@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.6.0",
+        "changelog": "- chore: Remove unused ENABLE_THEME_VIDEO_FALLBACK JS constant\n- fix: Restore Back button & disable on touch devices (closes #15)",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.6.0/HoverTrailer-0.2.6.0-server.zip",
+        "checksum": "1ba98ade8964a28a35eb9461f48e46ad",
+        "timestamp": "2026-04-16T19:17:34Z"
+      },
+      {
         "version": "0.2.5.0",
         "changelog": "- feat: Add hover progress indicator on cards during delay\n- fix: Use markdown dash format for changelogs\n- fix: Update v0.2.4.0 changelog in manifest\n- fix: Improve release changelog generation and t",
         "targetAbi": "10.11.0.0",
