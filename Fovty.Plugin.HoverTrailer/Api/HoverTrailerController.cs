@@ -455,7 +455,6 @@ public class HoverTrailerController : ControllerBase
     const REMOTE_VIDEO_QUALITY = '{config.RemoteVideoQuality}';
     const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
-    const ENABLE_THEME_VIDEO_FALLBACK = {config.EnableThemeVideoFallback.ToString().ToLower()};
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
 
     // Disable on touch devices: hover UX doesn't apply and mobile WebViews
