@@ -796,16 +796,20 @@ public class HoverTrailerController : ControllerBase
             border: none;
             object-fit: cover;
         `;
-        iframe.src = embedUrl;
-        iframe.id = 'youtube-preview-' + Date.now(); // Unique ID for IFrame API
-        // Critical attributes to prevent YouTube Error 153
+        // Set permission and security attributes BEFORE src so the initial
+        // navigation commits with the Permissions Policy in effect (issue #16:
+        // setting src first caused the first-hover autoplay on a fresh page
+        // to be blocked because the iframe's allow='autoplay' delegation
+        // wasn't applied when Chrome/Safari committed the navigation).
+        iframe.id = 'youtube-preview-' + Date.now();
         iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
         iframe.setAttribute('allowfullscreen', '');
         iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
         iframe.setAttribute('frameborder', '0');
+        iframe.dataset.pendingSrc = embedUrl;
 
         container.appendChild(iframe);
-        log('Created YouTube preview iframe with URL:', embedUrl);
+        log('Created YouTube preview iframe (src deferred until DOM attach):', embedUrl);
 
         // Set up YouTube IFrame API for volume and quality control
         // Since video starts muted, immediately unmute and set volume when ready
@@ -825,11 +829,13 @@ public class HoverTrailerController : ControllerBase
                         log('YouTube quality set to: ' + REMOTE_VIDEO_QUALITY);
                     }}
 
-                    if (volumePercent === 0) {{
-                        // Keep muted if volume is 0 or audio is disabled
-                        log('YouTube iframe kept muted (volume=0 or audio disabled)');
+                    // Issue #16: Chrome/Safari pause a playing muted video when
+                    // postMessage unMute fires without prior user activation,
+                    // so keep muted until the document has sticky activation.
+                    const hasUserActivation = !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+                    if (volumePercent === 0 || !hasUserActivation) {{
+                        log('YouTube iframe kept muted (volume=0, audio disabled, or no user activation yet)');
                     }} else {{
-                        // Unmute and set volume immediately
                         iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'unMute',args:''}}), '*');
                         iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'setVolume',args:[volumePercent]}}), '*');
                         log('YouTube iframe unmuted and volume set to ' + volumePercent + '%');
@@ -1022,6 +1028,16 @@ public class HoverTrailerController : ControllerBase
                 document.body.appendChild(container);
                 currentPreview = container;
                 currentCardElement = element;
+
+                // Issue #16: assign YouTube iframe src AFTER the iframe is
+                // attached to the live document so Permissions Policy
+                // ('allow=autoplay') is in effect when Chrome/Safari commit
+                // the navigation. src was stashed in createYouTubePreview().
+                if (trailerInfo.IsRemote && video && video.dataset.pendingSrc) {{
+                    const pending = video.dataset.pendingSrc;
+                    delete video.dataset.pendingSrc;
+                    video.src = pending;
+                }}
 
                 if (trailerInfo.IsRemote) {{
                     // For YouTube iframe, show immediately and apply blur
