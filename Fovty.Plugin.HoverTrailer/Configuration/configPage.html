@@ -162,6 +162,7 @@
                                 <select id="PreviewPositioningMode" name="PreviewPositioningMode" is="emby-select" class="emby-select-withcolor emby-select">
                                     <option value="Center">Center (Automatically Centered)</option>
                                     <option value="Custom">Custom (Manual Positioning)</option>
+                                    <option value="AnchorToCard">Anchor to Card (Tethered, scrolls with poster)</option>
                                 </select>
                                 <div class="fieldDescription">Choose how to position the preview window</div>
                             </div>
@@ -170,14 +171,22 @@
                                 <div class="inputContainer">
                                     <label class="inputLabel inputLabelUnfocused" for="PreviewOffsetX">Horizontal Offset (px)</label>
                                     <input id="PreviewOffsetX" name="PreviewOffsetX" type="number" min="-2000" max="2000" is="emby-input" />
-                                    <div class="fieldDescription">Horizontal offset from default position (-2000 to +2000 pixels)</div>
+                                    <div class="fieldDescription">In Custom mode: horizontal offset from viewport center. In Anchor to Card mode: horizontal offset from card center (-2000 to +2000 px).</div>
                                 </div>
 
                                 <div class="inputContainer">
                                     <label class="inputLabel inputLabelUnfocused" for="PreviewOffsetY">Vertical Offset (px)</label>
                                     <input id="PreviewOffsetY" name="PreviewOffsetY" type="number" min="-2000" max="2000" is="emby-input" />
-                                    <div class="fieldDescription">Vertical offset from default position (-2000 to +2000 pixels)</div>
+                                    <div class="fieldDescription">In Custom mode: vertical offset from viewport center. In Anchor to Card mode: vertical offset from card center (-2000 to +2000 px).</div>
                                 </div>
+                            </div>
+
+                            <div class="checkboxContainer">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnablePersistentPreview" name="EnablePersistentPreview" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Keep preview playing after cursor leaves card</span>
+                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
+                                <div class="fieldDescription">When enabled, the preview stays visible until you click anywhere, press Escape, or hover a different card long enough for a new preview to start.</div>
                             </div>
 
                             <div class="selectContainer">
@@ -318,6 +327,7 @@
                     document.querySelector('#RemoteVideoQuality').value = config.RemoteVideoQuality || 'adaptive';
                     document.querySelector('#EnableBackgroundBlur').checked = config.EnableBackgroundBlur || false;
                     document.querySelector('#EnableToastNotifications').checked = config.EnableToastNotifications !== false;
+                    document.querySelector('#EnablePersistentPreview').checked = config.EnablePersistentPreview || false;
 
                     // Update positioning and sizing mode visibility
                     updatePositioningModeVisibility();
@@ -361,6 +371,7 @@
                     config.RemoteVideoQuality = document.querySelector('#RemoteVideoQuality').value || 'adaptive';
                     config.EnableBackgroundBlur = document.querySelector('#EnableBackgroundBlur').checked;
                     config.EnableToastNotifications = document.querySelector('#EnableToastNotifications').checked;
+                    config.EnablePersistentPreview = document.querySelector('#EnablePersistentPreview').checked;
 
                     // Trailer Fallback Settings
                     config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;
@@ -403,12 +414,9 @@
             function updatePositioningModeVisibility() {
                 const positioningMode = document.querySelector('#PreviewPositioningMode').value;
                 const customPositionContainer = document.querySelector('#customPositionContainer');
-
-                if (positioningMode === 'Center') {
-                    customPositionContainer.style.display = 'none';
-                } else if (positioningMode === 'Custom') {
-                    customPositionContainer.style.display = 'block';
-                }
+                // Offsets apply in Custom (viewport-relative) and AnchorToCard (card-relative).
+                const showOffsets = positioningMode === 'Custom' || positioningMode === 'AnchorToCard';
+                customPositionContainer.style.display = showOffsets ? 'block' : 'none';
             }
 
             document.querySelector("#HoverTrailerConfigPage").addEventListener("pageshow", () => {

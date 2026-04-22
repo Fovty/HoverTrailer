@@ -44,9 +44,17 @@ public class PluginConfiguration : BasePluginConfiguration
     public string PreviewSizingMode { get; set; } = "FitContent";
 
     /// <summary>
-    /// Gets or sets the preview positioning mode (Center or Custom).
+    /// Gets or sets the preview positioning mode (Center, Custom, or AnchorToCard).
     /// </summary>
     public string PreviewPositioningMode { get; set; } = "Center";
+
+    /// <summary>
+    /// Gets or sets whether the preview should keep playing after the cursor
+    /// leaves the card. When true, the preview is only dismissed by clicking
+    /// anywhere, pressing Escape, or hovering a different card long enough
+    /// for a new preview to start.
+    /// </summary>
+    public bool EnablePersistentPreview { get; set; }
 
     /// <summary>
     /// Gets or sets the preview width in pixels (Manual mode).
@@ -207,9 +215,10 @@ public class PluginConfiguration : BasePluginConfiguration
 
         // Preview positioning mode validation
         if (!string.Equals(PreviewPositioningMode, "Center", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewPositioningMode, "Custom", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(PreviewPositioningMode, "Custom", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(PreviewPositioningMode, "AnchorToCard", StringComparison.OrdinalIgnoreCase))
         {
-            yield return "Preview Positioning Mode must be 'Center' or 'Custom'";
+            yield return "Preview Positioning Mode must be 'Center', 'Custom', or 'AnchorToCard'";
         }
     }
 
@@ -332,8 +341,9 @@ public class PluginConfiguration : BasePluginConfiguration
     private string? ValidatePreviewPositioningMode()
     {
         if (!string.Equals(PreviewPositioningMode, "Center", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewPositioningMode, "Custom", StringComparison.OrdinalIgnoreCase))
-            return "Preview Positioning Mode must be 'Center' or 'Custom'";
+            !string.Equals(PreviewPositioningMode, "Custom", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(PreviewPositioningMode, "AnchorToCard", StringComparison.OrdinalIgnoreCase))
+            return "Preview Positioning Mode must be 'Center', 'Custom', or 'AnchorToCard'";
         return null;
     }
 }

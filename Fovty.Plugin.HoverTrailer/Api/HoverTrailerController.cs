@@ -456,6 +456,7 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
+    const ENABLE_PERSISTENT_PREVIEW = {config.EnablePersistentPreview.ToString().ToLower()};
 
     // Disable on touch devices: hover UX doesn't apply and mobile WebViews
     // exhibit freezes around iframe cleanup (issue #15).
@@ -473,6 +474,8 @@ public class HoverTrailerController : ControllerBase
     let currentCardElement;
     let isPlaying = false;
     let resizeHandler;
+    let anchorTrackerRafId = null;
+    let persistentDismissHandlers = null; // {{click, keydown}} when ENABLE_PERSISTENT_PREVIEW is active
     let attachedCards = new WeakSet(); // Track actual card elements that already have listeners
     let mutationDebounce = null;
     let currentToast = null;
@@ -774,6 +777,27 @@ public class HoverTrailerController : ControllerBase
                 opacity: 0;
                 transition: opacity 0.3s ease;
             `;
+        }} else if (PREVIEW_POSITIONING_MODE === 'AnchorToCard') {{
+            // Anchor to card: position via translate3d and update each frame in
+            // attachAnchorTracker so the preview follows the card on scroll.
+            // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
+            const anchorX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
+            const anchorY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
+            containerStyles = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                transform: translate3d(${{anchorX}}px, ${{anchorY}}px, 0);
+                width: ${{containerWidth}}px;
+                height: ${{containerHeight}}px;
+                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                z-index: 10000;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
         }} else {{
             containerStyles = `
                 position: fixed;
@@ -900,6 +924,27 @@ public class HoverTrailerController : ControllerBase
                 opacity: 0;
                 transition: opacity 0.3s ease;
             `;
+        }} else if (PREVIEW_POSITIONING_MODE === 'AnchorToCard') {{
+            // Anchor to card: position via translate3d and update each frame in
+            // attachAnchorTracker so the preview follows the card on scroll.
+            // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
+            const anchorX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
+            const anchorY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
+            containerStyles = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                transform: translate3d(${{anchorX}}px, ${{anchorY}}px, 0);
+                width: ${{containerWidth}}px;
+                height: ${{containerHeight}}px;
+                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                z-index: 10000;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
         }} else {{
             // Custom positioning relative to card with offsets
             containerStyles = `
@@ -945,8 +990,61 @@ public class HoverTrailerController : ControllerBase
         return container;
     }}
 
+    // AnchorToCard positioning: re-read the card's bounding rect every frame
+    // and update the preview's translate3d so it tracks the card during scroll.
+    // The loop self-terminates when the preview is torn down or the card
+    // leaves the DOM. hidePreview() also cancels the rAF handle explicitly.
+    function attachAnchorTracker(container, cardElement) {{
+        function tick() {{
+            // Stop if preview was torn down, or the tracked container/card is stale
+            if (currentPreview !== container || !cardElement.isConnected) {{
+                anchorTrackerRafId = null;
+                return;
+            }}
+            const cardRect = cardElement.getBoundingClientRect();
+            const width = container.offsetWidth;
+            const height = container.offsetHeight;
+            const anchorX = Math.round(cardRect.left + cardRect.width / 2 - width / 2 + PREVIEW_OFFSET_X);
+            const anchorY = Math.round(cardRect.top + cardRect.height / 2 - height / 2 + PREVIEW_OFFSET_Y);
+            container.style.transform = `translate3d(${{anchorX}}px, ${{anchorY}}px, 0)`;
+            anchorTrackerRafId = requestAnimationFrame(tick);
+        }}
+        anchorTrackerRafId = requestAnimationFrame(tick);
+    }}
+
+    // Persistent-preview dismissers: a document-level click or Escape key
+    // tears down the current preview. Listeners are attached when the preview
+    // shows and removed in hidePreview. The click handler uses capture-phase
+    // so cards' own click handlers still fire (they also tear down via
+    // isPlaying + hidePreview in the card click listener).
+    function attachPersistentDismissers() {{
+        detachPersistentDismissers();
+        const onClick = () => {{ hidePreview(); }};
+        const onKey = (e) => {{ if (e.key === 'Escape') hidePreview(); }};
+        document.addEventListener('click', onClick, true);
+        document.addEventListener('keydown', onKey, true);
+        persistentDismissHandlers = {{ click: onClick, keydown: onKey }};
+    }}
+
+    function detachPersistentDismissers() {{
+        if (!persistentDismissHandlers) return;
+        document.removeEventListener('click', persistentDismissHandlers.click, true);
+        document.removeEventListener('keydown', persistentDismissHandlers.keydown, true);
+        persistentDismissHandlers = null;
+    }}
+
     function showPreview(element, itemId) {{
-        if (currentPreview || isPlaying) return;
+        if (isPlaying) return;
+
+        // In persistent mode, a new hover replaces the old preview. Otherwise,
+        // an existing preview blocks a new one until it is dismissed.
+        if (currentPreview) {{
+            if (ENABLE_PERSISTENT_PREVIEW && currentCardElement !== element) {{
+                hidePreview();
+            }} else {{
+                return;
+            }}
+        }}
 
         hideProgressIndicator(currentCardElement || element);
 
@@ -1038,6 +1136,20 @@ public class HoverTrailerController : ControllerBase
                 document.body.appendChild(container);
                 currentPreview = container;
                 currentCardElement = element;
+
+                // AnchorToCard mode: start the rAF loop that keeps the preview
+                // tethered to the card as the user scrolls. Runs for both
+                // YouTube and local-video paths.
+                if (PREVIEW_POSITIONING_MODE === 'AnchorToCard') {{
+                    attachAnchorTracker(container, element);
+                }}
+
+                // Persistent preview: install document-level listeners so the
+                // user can dismiss via click or Escape while the cursor is off
+                // the card.
+                if (ENABLE_PERSISTENT_PREVIEW) {{
+                    attachPersistentDismissers();
+                }}
 
                 // Issue #16: assign YouTube iframe src AFTER the iframe is
                 // attached to the live document so Permissions Policy
@@ -1197,6 +1309,17 @@ public class HoverTrailerController : ControllerBase
             currentAbortController = null;
         }}
 
+        // Cancel the AnchorToCard rAF tracker BEFORE removing the preview
+        // from the DOM, so the next frame's getBoundingClientRect on a stale
+        // card/container doesn't fire.
+        if (anchorTrackerRafId !== null) {{
+            cancelAnimationFrame(anchorTrackerRafId);
+            anchorTrackerRafId = null;
+        }}
+
+        // Remove persistent-preview dismissers if any were installed.
+        detachPersistentDismissers();
+
         // Always hide toast when hiding preview
         hideToast();
 
@@ -1283,6 +1406,12 @@ public class HoverTrailerController : ControllerBase
             card.addEventListener('mouseleave', () => {{
                 clearTimeout(hoverTimeout);
                 hideProgressIndicator(card);
+                // In persistent mode, any mouseleave keeps the existing preview
+                // alive — even on a different card the user briefly hovered
+                // before reaching HOVER_DELAY. Dismissal is click/Escape/swap.
+                if (ENABLE_PERSISTENT_PREVIEW && currentPreview) {{
+                    return;
+                }}
                 hidePreview();
             }});
 
