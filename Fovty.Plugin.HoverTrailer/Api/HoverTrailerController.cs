@@ -739,6 +739,16 @@ public class HoverTrailerController : ControllerBase
             containerWidth = Math.round(containerWidth * (PREVIEW_SIZE_PERCENTAGE / 100));
             containerHeight = Math.round(containerHeight * (PREVIEW_SIZE_PERCENTAGE / 100));
 
+            // Clamp to 90% of viewport, preserving aspect ratio. High % values on small
+            // home-section cards otherwise overflow the screen entirely.
+            const maxW = window.innerWidth * 0.9;
+            const maxH = window.innerHeight * 0.9;
+            const clampScale = Math.min(1, maxW / containerWidth, maxH / containerHeight);
+            if (clampScale < 1) {{
+                containerWidth = Math.round(containerWidth * clampScale);
+                containerHeight = Math.round(containerHeight * clampScale);
+            }}
+
             log(`YouTube FitContent dimensions: ${{containerWidth}}x${{containerHeight}} (${{PREVIEW_SIZE_PERCENTAGE}}% of calculated fit)`);
         }} else {{
             // Manual mode uses configured width/height
@@ -1105,8 +1115,17 @@ public class HoverTrailerController : ControllerBase
                             log(`Calculated fit dimensions: ${{newWidth}}x${{newHeight}}`);
 
                             // Apply percentage scaling to the fit dimensions
-                            const scaledWidth = Math.round(newWidth * (PREVIEW_SIZE_PERCENTAGE / 100));
-                            const scaledHeight = Math.round(newHeight * (PREVIEW_SIZE_PERCENTAGE / 100));
+                            let scaledWidth = Math.round(newWidth * (PREVIEW_SIZE_PERCENTAGE / 100));
+                            let scaledHeight = Math.round(newHeight * (PREVIEW_SIZE_PERCENTAGE / 100));
+
+                            // Clamp to 90% of viewport, preserving aspect ratio.
+                            const maxW = window.innerWidth * 0.9;
+                            const maxH = window.innerHeight * 0.9;
+                            const clampScale = Math.min(1, maxW / scaledWidth, maxH / scaledHeight);
+                            if (clampScale < 1) {{
+                                scaledWidth = Math.round(scaledWidth * clampScale);
+                                scaledHeight = Math.round(scaledHeight * clampScale);
+                            }}
 
                             container.style.width = scaledWidth + 'px';
                             container.style.height = scaledHeight + 'px';
