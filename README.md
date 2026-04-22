@@ -59,22 +59,32 @@
 https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 ```
 
+> **Recommended companion plugin:** install [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) (v2.2.1.0+) first. HoverTrailer auto-detects it and injects the client script through it instead of modifying files on disk.
+
 ## Features
 
-- **Netflix-style Hover Previews**: Display movie trailers when hovering over movie cards
-- **Customizable Positioning**: Adjust horizontal and vertical offset of trailer previews
-- **Flexible Sizing Options**:
-  - Fit to Video Content (automatic sizing based on video aspect ratio)
-  - Manual Width/Height settings
-- **Visual Customization**:
-  - Adjustable opacity (0.1 to 1.0)
-  - Configurable border radius (0-50px)
-  - Percentage-based scaling (50% to 1500%)
-- **Audio Control**: Optional audio playback for trailer previews
-- **Multi-source Trailer Detection**:
-  - Local trailer files
-  - Remote YouTube trailers via Jellyfin's native API
-- **Debug Mode**: Comprehensive logging for troubleshooting
+**Playback**
+- Netflix-style hover preview with configurable delay
+- Multi-source trailer detection: local files, remote YouTube, and optional theme-video fallback
+- Audio on/off with adjustable volume (muted during autoplay until the page has user activation — browser policy)
+- Hover progress indicator on the card during the delay
+
+**Positioning modes**
+- **Center** — preview is centered in the viewport (default)
+- **Custom** — preview is centered on the card with configurable offsets
+- **Anchor to Card** — preview follows the card as the page scrolls (tethered)
+
+**Sizing**
+- **Fit to Content** (default) — matches the trailer's aspect ratio, scaled by a percentage you choose (50-1500%), clamped to 90% of the viewport
+- **Manual** — fixed width and height in pixels
+- Adjustable opacity and corner radius
+
+**Background blur**
+- **Off** / **Full** (uniform blur over the page) / **Halo** (dense blur right next to the preview, fading out over a configurable radius — hides distracting nearby posters without dimming the whole screen)
+
+**Behavior options**
+- **Persistent preview** — keep playing after the cursor leaves the card; dismiss with click, Escape, or by hovering a different card long enough for a new preview to start
+- **Focus trigger** — keyboard/D-pad focus on a card triggers the preview (for Jellyfin Web in a TV browser or with spatial-navigation overlays). Mouse clicks don't re-trigger.
 
 ## Installation
 
@@ -91,6 +101,7 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 7. Search for **"HoverTrailer"**
 8. Click **Install**
 9. **Restart Jellyfin server** to activate the plugin
+10. Open **Plugins** → **HoverTrailer** → **Settings** to configure (every option has an inline description)
 
 ### Manual Installation
 1. Download the latest release from [GitHub Releases](../../releases)
@@ -100,100 +111,57 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
    - **Docker**: `/config/plugins/HoverTrailer`
 3. Restart Jellyfin server
 
-## Configuration
+## Known limitations
 
-Access plugin settings through:
-**Jellyfin Admin Dashboard** → **Plugins** → **HoverTrailer** → **Settings**
+- **Touch devices**: hover is a pointer-only gesture, so the plugin disables itself on phones and tablets (UA sniff + `(hover: none)`).
+- **Native mobile / TV apps**: Jellyfin's native mobile and smart-TV apps don't load the web frontend, so the plugin has no effect there. Focus Trigger covers the Jellyfin-Web-in-a-TV-browser case.
+- **If audio is enabled**, the first hover after a fresh page load still plays **muted**. Chrome and Safari block unmuted autoplay until you interact with the page once — click anywhere and all subsequent hovers have audio.
+- **YouTube iframe aspect ratio** is hardcoded to 16:9. The YouTube iframe is cross-origin so the actual video aspect can't be read.
 
 ## Troubleshooting
 
-### Trailers Not Playing
-1. **Check trailer availability**:
-   - Verify movie has trailer metadata in Jellyfin
-   - Check if trailer files exist in media directory
+### Trailers not playing
+1. **Check trailer availability** — confirm the movie has a trailer URL or local trailer file in Jellyfin.
+2. **Enable Debug Logging** and watch the browser console (F12) for `[HoverTrailer]` lines.
+3. **Audio**: if you expect sound on the first hover, click anywhere in Jellyfin once to grant the page user activation.
 
-2. **Enable debug mode**:
-   - Turn on "Enable Debug Mode" in plugin settings
-   - Check browser console for error messages
+### Preview not showing
+1. Confirm the plugin appears in the Jellyfin admin panel and is enabled.
+2. **Hard reload** the page (Ctrl+Shift+R / Cmd+Shift+R) — the client script is cached by the browser.
+3. Make sure you're on a desktop browser (phones and tablets skip the plugin by design).
 
-3. **Audio issues**:
-   - Browser may block autoplay with audio
-   - Plugin automatically falls back to muted playback
+### Docker permission issues
+If you see `Access to the path '/usr/share/jellyfin/web/index.html' is denied`, install the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin (see the recommendation under [Manifest URL](#manifest-url)) — HoverTrailer will detect it and stop touching the web directory.
 
-### Preview Not Showing
-1. **Verify plugin installation**:
-   - Check plugin appears in Jellyfin admin panel
-   - Ensure plugin is enabled and active
+<details>
+<summary>Manual alternatives if you can't use File Transformation</summary>
 
-2. **Clear browser cache**:
-   - Force refresh browser (Ctrl+F5)
-   - Clear Jellyfin web client cache
-
-### Docker Permission Issues
-If you encounter `Access to the path '/usr/share/jellyfin/web/index.html' is denied` or similar permission errors in Docker:
-
-**Option 1: Use File Transformation Plugin (Recommended)**
-
-HoverTrailer now automatically detects and uses the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin (v2.2.1.0+) if it's installed. This eliminates permission issues by transforming content at runtime without modifying files on disk.
-
-**Installation Steps:**
-1. Install the File Transformation plugin from the Jellyfin plugin catalog
-2. Restart Jellyfin
-3. HoverTrailer will automatically detect and use it (no configuration needed)
-4. Check logs to confirm: Look for "Successfully registered transformation with File Transformation plugin"
-
-**Benefits:**
-- No file permission issues in Docker environments
-- Works with read-only web directories
-- Survives Jellyfin updates without re-injection
-- No manual file modifications required
-
-**Option 2: Fix File Permissions**
+**Fix file permissions:**
 ```bash
-# Find the actual index.html location
 docker exec -it jellyfin find / -name index.html
-
-# Fix ownership (replace 'jellyfin' with your container name and adjust user:group if needed)
 docker exec -it --user root jellyfin chown jellyfin:jellyfin /jellyfin/jellyfin-web/index.html
-
-# Restart container
 docker restart jellyfin
 ```
 
-**Option 3: Manual Volume Mapping**
+**Or bind-mount the file:**
 ```bash
-# Extract index.html from container
 docker cp jellyfin:/jellyfin/jellyfin-web/index.html /path/to/jellyfin/config/index.html
-
-# Add to docker-compose.yml volumes section:
+# then in docker-compose.yml:
 volumes:
   - /path/to/jellyfin/config/index.html:/jellyfin/jellyfin-web/index.html
 ```
+</details>
 
 ## Development
 
-### Building from Source
 ```bash
-# Clone repository
 git clone https://github.com/Fovty/HoverTrailer.git
 cd hovertrailer
-
-# Build plugin (warnings suppressed due to StyleCop/Code Analysis)
+# StyleCop warnings are treated as errors in CI; suppress locally:
 dotnet build --configuration Release --property:TreatWarningsAsErrors=false
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-- Follow existing code style and conventions
-- Update documentation for configuration changes
-- Test across different browsers and Jellyfin versions
+Contributions welcome — fork, branch, PR. Match the existing code style, update docs alongside any configuration change, and test across browsers / Jellyfin versions.
 
 ## License
 
@@ -214,4 +182,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Note**: This plugin is not officially affiliated with Jellyfin or Netflix. It's a community-developed enhancement for the Jellyfin media server.
-
