@@ -84,8 +84,7 @@ jobs:
               .replace(/## What's Changed\n/, '')
               .replace(/\*\*Full Changelog.*/, '')
               .replace(/^(\* )/gm, '- ')
-              .trim()
-              .substring(0, 200);
+              .trim();
           } catch (error) {
             console.log('Failed to generate release notes from API:', error.message);
           }
@@ -103,8 +102,7 @@ jobs:
                 .map(c => `- ${c.commit.message.split('\n')[0]}`)
                 .filter(m => !m.includes('Update manifest and version'))
                 .reverse()
-                .join('\n')
-                .substring(0, 200);
+                .join('\n');
             } catch (error) {
               console.log('Failed to generate changelog from commits:', error.message);
             }
