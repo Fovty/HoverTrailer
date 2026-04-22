@@ -488,6 +488,21 @@ public class HoverTrailerController : ControllerBase
     // Inflate the halo backdrop beyond the viewport so we can translate it
     // freely during scroll without exposing unblurred edges.
     const HALO_INFLATE = 1500;
+    // Keep AnchorToCard previews fully on-screen when a card sits near the
+    // viewport edge. Margin is a small cosmetic gap. If the preview is wider
+    // or taller than the viewport (user-configured percentage too aggressive),
+    // pin to the margin — never push past.
+    const ANCHOR_VIEWPORT_MARGIN = 8;
+    function clampAnchorToViewport(anchorX, anchorY, width, height) {{
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const maxX = Math.max(ANCHOR_VIEWPORT_MARGIN, vw - width - ANCHOR_VIEWPORT_MARGIN);
+        const maxY = Math.max(ANCHOR_VIEWPORT_MARGIN, vh - height - ANCHOR_VIEWPORT_MARGIN);
+        return {{
+            x: Math.min(maxX, Math.max(ANCHOR_VIEWPORT_MARGIN, anchorX)),
+            y: Math.min(maxY, Math.max(ANCHOR_VIEWPORT_MARGIN, anchorY)),
+        }};
+    }}
     let attachedCards = new WeakSet(); // Track actual card elements that already have listeners
     let mutationDebounce = null;
     let currentToast = null;
@@ -865,8 +880,11 @@ public class HoverTrailerController : ControllerBase
             // Anchor to card: position via translate3d and update each frame in
             // attachAnchorTracker so the preview follows the card on scroll.
             // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
-            const anchorX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
-            const anchorY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
+            const rawX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
+            const rawY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
+            const clamped = clampAnchorToViewport(rawX, rawY, containerWidth, containerHeight);
+            const anchorX = clamped.x;
+            const anchorY = clamped.y;
             containerStyles = `
                 position: fixed;
                 top: 0;
@@ -1013,8 +1031,11 @@ public class HoverTrailerController : ControllerBase
             // Anchor to card: position via translate3d and update each frame in
             // attachAnchorTracker so the preview follows the card on scroll.
             // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
-            const anchorX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
-            const anchorY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
+            const rawX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
+            const rawY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
+            const clamped = clampAnchorToViewport(rawX, rawY, containerWidth, containerHeight);
+            const anchorX = clamped.x;
+            const anchorY = clamped.y;
             containerStyles = `
                 position: fixed;
                 top: 0;
@@ -1087,8 +1108,11 @@ public class HoverTrailerController : ControllerBase
             const cardRect = cardElement.getBoundingClientRect();
             const width = container.offsetWidth;
             const height = container.offsetHeight;
-            const anchorX = Math.round(cardRect.left + cardRect.width / 2 - width / 2 + PREVIEW_OFFSET_X);
-            const anchorY = Math.round(cardRect.top + cardRect.height / 2 - height / 2 + PREVIEW_OFFSET_Y);
+            const rawX = Math.round(cardRect.left + cardRect.width / 2 - width / 2 + PREVIEW_OFFSET_X);
+            const rawY = Math.round(cardRect.top + cardRect.height / 2 - height / 2 + PREVIEW_OFFSET_Y);
+            const clamped = clampAnchorToViewport(rawX, rawY, width, height);
+            const anchorX = clamped.x;
+            const anchorY = clamped.y;
             container.style.transform = `translate3d(${{anchorX}}px, ${{anchorY}}px, 0)`;
             // Layout shifts (card images loading, scrollbar appearing) reposition
             // the preview off-scroll. The halo's scroll-only listener won't catch
