@@ -1230,7 +1230,11 @@ public class HoverTrailerController : ControllerBase
     }}
 
     function attachHoverListeners() {{
-        const itemCards = document.querySelectorAll('[data-type=""Movie""], [data-type=""Series""], .card[data-itemtype=""Movie""], .card[data-itemtype=""Series""]');
+        // Require .card class to skip Jellyfin's title <a> links (textActionButton),
+        // and exclude .chapterCard so scene/chapter buttons on details pages don't
+        // fire. Both data-type and data-itemtype variants exist across Jellyfin
+        // versions so we accept either.
+        const itemCards = document.querySelectorAll('.card[data-type=""Movie""]:not(.chapterCard), .card[data-type=""Series""]:not(.chapterCard), .card[data-itemtype=""Movie""]:not(.chapterCard), .card[data-itemtype=""Series""]:not(.chapterCard)');
         let newCardsCount = 0;
 
         itemCards.forEach(card => {{
@@ -1292,11 +1296,11 @@ public class HoverTrailerController : ControllerBase
                 for (const node of mutation.addedNodes) {{
                     if (node.nodeType === 1) {{ // Element node
                         // Check if it's an item card or contains item cards
-                        if (node.matches && (node.matches('[data-type=""Movie""], [data-type=""Series""]') || node.matches('.card[data-itemtype=""Movie""], .card[data-itemtype=""Series""]'))) {{
+                        if (node.matches && node.matches('.card[data-type=""Movie""]:not(.chapterCard), .card[data-type=""Series""]:not(.chapterCard), .card[data-itemtype=""Movie""]:not(.chapterCard), .card[data-itemtype=""Series""]:not(.chapterCard)')) {{
                             hasItemCardChanges = true;
                             break;
                         }}
-                        if (node.querySelector && node.querySelector('[data-type=""Movie""], [data-type=""Series""], .card[data-itemtype=""Movie""], .card[data-itemtype=""Series""]')) {{
+                        if (node.querySelector && node.querySelector('.card[data-type=""Movie""]:not(.chapterCard), .card[data-type=""Series""]:not(.chapterCard), .card[data-itemtype=""Movie""]:not(.chapterCard), .card[data-itemtype=""Series""]:not(.chapterCard)')) {{
                             hasItemCardChanges = true;
                             break;
                         }}
