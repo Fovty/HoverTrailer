@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.7.0",
+        "changelog": "- feat: optional focus trigger for keyboard / D-pad navigation\n- feat: Halo background blur mode + scroll-smooth tracking\n- feat: AnchorToCard positioning mode and persistent preview\n- fix: clamp hove",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.7.0/HoverTrailer-0.2.7.0-server.zip",
+        "checksum": "c110f19d1342f56ea2920a33529babce",
+        "timestamp": "2026-04-22T20:27:16Z"
+      },
+      {
         "version": "0.2.6.1",
         "changelog": "- fix: YouTube trailer autoplay on first hover after fresh load (closes #16)",
         "targetAbi": "10.11.0.0",
