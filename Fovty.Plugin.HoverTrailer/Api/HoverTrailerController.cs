@@ -481,6 +481,8 @@ public class HoverTrailerController : ControllerBase
     let blurHaloScrollHandler = null; // capture-phase scroll listener — translates backdrop to follow preview
     let blurHaloAnchorLeft = 0;      // viewport coords of preview when mask was rendered
     let blurHaloAnchorTop = 0;
+    let blurHaloAnchorWidth = 0;     // preview size when mask was rendered — re-render on change
+    let blurHaloAnchorHeight = 0;
     let persistentDismissHandlers = null; // {{click, keydown}} when ENABLE_PERSISTENT_PREVIEW is active
 
     // Inflate the halo backdrop beyond the viewport so we can translate it
@@ -686,6 +688,8 @@ public class HoverTrailerController : ControllerBase
         const rect = currentPreview.getBoundingClientRect();
         blurHaloAnchorLeft = rect.left;
         blurHaloAnchorTop = rect.top;
+        blurHaloAnchorWidth = rect.width;
+        blurHaloAnchorHeight = rect.height;
         const W = window.innerWidth;
         const H = window.innerHeight;
         const CW = W + HALO_INFLATE * 2;
@@ -715,7 +719,11 @@ public class HoverTrailerController : ControllerBase
         const rect = currentPreview.getBoundingClientRect();
         const dx = rect.left - blurHaloAnchorLeft;
         const dy = rect.top - blurHaloAnchorTop;
-        if (Math.abs(dx) > HALO_INFLATE * 0.6 || Math.abs(dy) > HALO_INFLATE * 0.6) {{
+        // Size change (FitContent loadedmetadata, settings change) invalidates
+        // the cutout dimensions — must re-render, can't translate.
+        const sizeChanged = Math.abs(rect.width - blurHaloAnchorWidth) > 1
+                         || Math.abs(rect.height - blurHaloAnchorHeight) > 1;
+        if (sizeChanged || Math.abs(dx) > HALO_INFLATE * 0.6 || Math.abs(dy) > HALO_INFLATE * 0.6) {{
             renderHaloMask(backdrop);
         }} else {{
             backdrop.style.transform = `translate3d(${{Math.round(dx)}}px, ${{Math.round(dy)}}px, 0)`;
@@ -1082,6 +1090,13 @@ public class HoverTrailerController : ControllerBase
             const anchorX = Math.round(cardRect.left + cardRect.width / 2 - width / 2 + PREVIEW_OFFSET_X);
             const anchorY = Math.round(cardRect.top + cardRect.height / 2 - height / 2 + PREVIEW_OFFSET_Y);
             container.style.transform = `translate3d(${{anchorX}}px, ${{anchorY}}px, 0)`;
+            // Layout shifts (card images loading, scrollbar appearing) reposition
+            // the preview off-scroll. The halo's scroll-only listener won't catch
+            // these, so drive halo updates from the same frame the preview moves.
+            if (BACKGROUND_BLUR_MODE === 'Halo') {{
+                const backdrop = document.getElementById('hover-trailer-backdrop');
+                if (backdrop) trackHaloPosition(backdrop);
+            }}
             return true;
         }}
         function tick() {{
