@@ -1378,42 +1378,11 @@ public class HoverTrailerController : ControllerBase
                     }});
                 }}
 
-                // Add resize handler to reposition container on window resize
-                resizeHandler = () => {{
-                    if (currentPreview && currentCardElement) {{
-                        const cardRect = currentCardElement.getBoundingClientRect();
-                        const cardCenterX = cardRect.left + cardRect.width / 2;
-                        const cardCenterY = cardRect.top + cardRect.height / 2;
-
-                        // Recalculate container size if in FitContent mode
-                        if (PREVIEW_SIZING_MODE === 'FitContent') {{
-                            const video = currentPreview.querySelector('video');
-                            if (video && video.videoWidth && video.videoHeight) {{
-                                const videoAspectRatio = video.videoWidth / video.videoHeight;
-                                const cardAspectRatio = cardRect.width / cardRect.height;
-
-                                let newWidth, newHeight;
-                                if (videoAspectRatio > cardAspectRatio) {{
-                                    newWidth = cardRect.width;
-                                    newHeight = Math.round(cardRect.width / videoAspectRatio);
-                                }} else {{
-                                    newHeight = cardRect.height;
-                                    newWidth = Math.round(cardRect.height * videoAspectRatio);
-                                }}
-
-                                // Apply percentage scaling
-                                const scaledWidth = Math.round(newWidth * (PREVIEW_SIZE_PERCENTAGE / 100));
-                                const scaledHeight = Math.round(newHeight * (PREVIEW_SIZE_PERCENTAGE / 100));
-
-                                currentPreview.style.width = `${{scaledWidth}}px`;
-                                currentPreview.style.height = `${{scaledHeight}}px`;
-                            }}
-                        }}
-
-                        currentPreview.style.top = `calc(${{cardCenterY}}px + ${{PREVIEW_OFFSET_Y}}px)`;
-                        currentPreview.style.left = `calc(${{cardCenterX}}px + ${{PREVIEW_OFFSET_X}}px)`;
-                    }}
-                }};
+                // Dismiss the preview on window resize. Trying to live-reposition
+                // in AnchorToCard + Halo modes fights the rAF tracker and leaves
+                // the halo mask stranded at old coords; a clean tear-down is what
+                // the user asked for. The listener is removed in hidePreview.
+                resizeHandler = () => {{ hidePreview(); }};
                 window.addEventListener('resize', resizeHandler);
 
                 log('Preview created for:', trailerInfo.Name);
