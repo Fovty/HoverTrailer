@@ -99,8 +99,23 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets whether to enable background blurring during trailer playback.
+    /// Legacy boolean retained for migration; new installs should use
+    /// <see cref="BackgroundBlurMode"/> instead.
     /// </summary>
-    public bool EnableBackgroundBlur { get; set; } = false;
+    public bool EnableBackgroundBlur { get; set; }
+
+    /// <summary>
+    /// Gets or sets the background blur mode: "Off", "Full" (uniform blur),
+    /// or "Halo" (rectangular falloff blur around the preview).
+    /// </summary>
+    public string BackgroundBlurMode { get; set; } = "Off";
+
+    /// <summary>
+    /// Gets or sets the falloff radius in pixels for Halo blur mode. The
+    /// blur is densest right next to the preview and fades to nothing at
+    /// this distance.
+    /// </summary>
+    public int BackgroundBlurFalloffRadius { get; set; } = 200;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show toast notifications for trailer loading status.
@@ -220,6 +235,34 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             yield return "Preview Positioning Mode must be 'Center', 'Custom', or 'AnchorToCard'";
         }
+
+        // Background blur mode validation. Empty is allowed for migration —
+        // legacy installs may have only EnableBackgroundBlur set.
+        if (!string.IsNullOrEmpty(BackgroundBlurMode) &&
+            !string.Equals(BackgroundBlurMode, "Off", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(BackgroundBlurMode, "Full", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(BackgroundBlurMode, "Halo", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "Background Blur Mode must be 'Off', 'Full', or 'Halo'";
+        }
+
+        if (BackgroundBlurFalloffRadius < 50 || BackgroundBlurFalloffRadius > 800)
+        {
+            yield return "Background Blur Falloff Radius must be between 50 and 800 pixels";
+        }
+    }
+
+    /// <summary>
+    /// Resolves the effective background blur mode, applying legacy migration:
+    /// if <see cref="BackgroundBlurMode"/> is unset/Off and the legacy
+    /// <see cref="EnableBackgroundBlur"/> bool is true, return "Full".
+    /// </summary>
+    /// <returns>"Off", "Full", or "Halo".</returns>
+    public string GetEffectiveBackgroundBlurMode()
+    {
+        if (string.Equals(BackgroundBlurMode, "Halo", StringComparison.OrdinalIgnoreCase)) return "Halo";
+        if (string.Equals(BackgroundBlurMode, "Full", StringComparison.OrdinalIgnoreCase)) return "Full";
+        return EnableBackgroundBlur ? "Full" : "Off";
     }
 
     /// <summary>

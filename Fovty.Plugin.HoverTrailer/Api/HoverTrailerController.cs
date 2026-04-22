@@ -453,7 +453,8 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_PREVIEW_AUDIO = {config.EnablePreviewAudio.ToString().ToLower()};
     const PREVIEW_VOLUME = {config.PreviewVolume};
     const REMOTE_VIDEO_QUALITY = '{config.RemoteVideoQuality}';
-    const ENABLE_BACKGROUND_BLUR = {config.EnableBackgroundBlur.ToString().ToLower()};
+    const BACKGROUND_BLUR_MODE = '{config.GetEffectiveBackgroundBlurMode()}';
+    const BACKGROUND_BLUR_FALLOFF_RADIUS = {config.BackgroundBlurFalloffRadius};
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
     const ENABLE_PERSISTENT_PREVIEW = {config.EnablePersistentPreview.ToString().ToLower()};
@@ -475,7 +476,15 @@ public class HoverTrailerController : ControllerBase
     let isPlaying = false;
     let resizeHandler;
     let anchorTrackerRafId = null;
+    let anchorScrollHandler = null; // capture-phase scroll listener for AnchorToCard
+    let blurHaloScrollHandler = null; // capture-phase scroll listener — translates backdrop to follow preview
+    let blurHaloAnchorLeft = 0;      // viewport coords of preview when mask was rendered
+    let blurHaloAnchorTop = 0;
     let persistentDismissHandlers = null; // {{click, keydown}} when ENABLE_PERSISTENT_PREVIEW is active
+
+    // Inflate the halo backdrop beyond the viewport so we can translate it
+    // freely during scroll without exposing unblurred edges.
+    const HALO_INFLATE = 1500;
     let attachedCards = new WeakSet(); // Track actual card elements that already have listeners
     let mutationDebounce = null;
     let currentToast = null;
@@ -616,41 +625,107 @@ public class HoverTrailerController : ControllerBase
     }}
 
     function applyBackgroundBlur() {{
-        if (!ENABLE_BACKGROUND_BLUR) return;
+        if (BACKGROUND_BLUR_MODE === 'Off') return;
 
-        // Create or update backdrop blur element
         let backdrop = document.getElementById('hover-trailer-backdrop');
+        const isHalo = BACKGROUND_BLUR_MODE === 'Halo';
+        const inflate = isHalo ? HALO_INFLATE : 0;
         if (!backdrop) {{
             backdrop = document.createElement('div');
             backdrop.id = 'hover-trailer-backdrop';
+            // Halo: oversize the element so we can translate it on scroll
+            // without exposing unblurred screen edges. Full mode stays exactly
+            // viewport-sized.
             backdrop.style.cssText = `
                 position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
-                background: rgba(0, 0, 0, 0.1);
+                top: ${{-inflate}}px;
+                left: ${{-inflate}}px;
+                width: calc(100vw + ${{inflate * 2}}px);
+                height: calc(100vh + ${{inflate * 2}}px);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                background: rgba(0, 0, 0, 0.05);
                 z-index: 9999;
                 pointer-events: none;
                 opacity: 0;
                 transition: opacity 0.3s ease;
+                will-change: transform;
             `;
             document.body.appendChild(backdrop);
         }}
 
-        // Fade in the backdrop
-        setTimeout(() => {{
-            backdrop.style.opacity = '1';
-        }}, 10);
+        if (isHalo) {{
+            // Render the mask ONCE with the cutout at the preview's current
+            // viewport position, then keep it aligned with the preview by
+            // translating the whole backdrop on scroll. The mask never
+            // regenerates, so the GPU only does cheap composited translates
+            // and the backdrop-filter never has to re-rasterize a new mask.
+            renderHaloMask(backdrop);
+            if (blurHaloScrollHandler !== null) {{
+                window.removeEventListener('scroll', blurHaloScrollHandler, {{ capture: true }});
+            }}
+            blurHaloScrollHandler = () => {{ trackHaloPosition(backdrop); }};
+            window.addEventListener('scroll', blurHaloScrollHandler, {{ passive: true, capture: true }});
+        }} else {{
+            backdrop.style.maskImage = '';
+            backdrop.style.webkitMaskImage = '';
+            backdrop.style.transform = '';
+        }}
 
-        log('Background blur applied');
+        setTimeout(() => {{ backdrop.style.opacity = '1'; }}, 10);
+        log('Background blur applied (' + BACKGROUND_BLUR_MODE + ')');
+    }}
+
+    // Renders the halo SVG mask once. Cutout coordinates are in the inflated
+    // backdrop's local space (i.e., (HALO_INFLATE, HALO_INFLATE) maps to
+    // viewport (0, 0)). We capture the preview's current viewport position so
+    // trackHaloPosition can compute a delta translation on scroll.
+    function renderHaloMask(backdrop) {{
+        if (!currentPreview) return;
+        const rect = currentPreview.getBoundingClientRect();
+        blurHaloAnchorLeft = rect.left;
+        blurHaloAnchorTop = rect.top;
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const CW = W + HALO_INFLATE * 2;
+        const CH = H + HALO_INFLATE * 2;
+        const r = BACKGROUND_BLUR_FALLOFF_RADIUS;
+        const blurStd = Math.max(1, Math.round(r / 3));
+        const vL = Math.round(rect.left + HALO_INFLATE);
+        const vT = Math.round(rect.top + HALO_INFLATE);
+        const vW = Math.round(rect.width);
+        const vH = Math.round(rect.height);
+        const br = PREVIEW_BORDER_RADIUS;
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${{CW}} ${{CH}}' preserveAspectRatio='none'><defs><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='${{blurStd}}'/></filter></defs><rect width='100%' height='100%' fill='black'/><rect x='${{vL - r}}' y='${{vT - r}}' width='${{vW + 2 * r}}' height='${{vH + 2 * r}}' rx='${{br + r}}' ry='${{br + r}}' fill='white' filter='url(#b)'/><rect x='${{vL}}' y='${{vT}}' width='${{vW}}' height='${{vH}}' rx='${{br}}' ry='${{br}}' fill='black'/></svg>`;
+        const url = `url(""data:image/svg+xml;utf8,${{encodeURIComponent(svg)}}"")`;
+        backdrop.style.maskImage = url;
+        backdrop.style.webkitMaskImage = url;
+        backdrop.style.maskMode = 'luminance';
+        backdrop.style.webkitMaskMode = 'luminance';
+        backdrop.style.transform = 'translate3d(0, 0, 0)';
+    }}
+
+    // Cheap per-scroll update: read preview's current viewport position, set
+    // a translate3d on the backdrop equal to the delta from where the mask
+    // was anchored. If the delta exceeds the inflate buffer, re-render the
+    // mask at the new position and reset the delta to zero.
+    function trackHaloPosition(backdrop) {{
+        if (!currentPreview) return;
+        const rect = currentPreview.getBoundingClientRect();
+        const dx = rect.left - blurHaloAnchorLeft;
+        const dy = rect.top - blurHaloAnchorTop;
+        if (Math.abs(dx) > HALO_INFLATE * 0.6 || Math.abs(dy) > HALO_INFLATE * 0.6) {{
+            renderHaloMask(backdrop);
+        }} else {{
+            backdrop.style.transform = `translate3d(${{Math.round(dx)}}px, ${{Math.round(dy)}}px, 0)`;
+        }}
     }}
 
     function removeBackgroundBlur() {{
-        if (!ENABLE_BACKGROUND_BLUR) return;
-
+        if (blurHaloScrollHandler !== null) {{
+            window.removeEventListener('scroll', blurHaloScrollHandler, {{ capture: true }});
+            blurHaloScrollHandler = null;
+        }}
         const backdrop = document.getElementById('hover-trailer-backdrop');
         if (backdrop) {{
             backdrop.style.opacity = '0';
@@ -797,6 +872,7 @@ public class HoverTrailerController : ControllerBase
                 pointer-events: none;
                 opacity: 0;
                 transition: opacity 0.3s ease;
+                will-change: transform;
             `;
         }} else {{
             containerStyles = `
@@ -944,6 +1020,7 @@ public class HoverTrailerController : ControllerBase
                 pointer-events: none;
                 opacity: 0;
                 transition: opacity 0.3s ease;
+                will-change: transform;
             `;
         }} else {{
             // Custom positioning relative to card with offsets
@@ -995,20 +1072,31 @@ public class HoverTrailerController : ControllerBase
     // The loop self-terminates when the preview is torn down or the card
     // leaves the DOM. hidePreview() also cancels the rAF handle explicitly.
     function attachAnchorTracker(container, cardElement) {{
-        function tick() {{
-            // Stop if preview was torn down, or the tracked container/card is stale
-            if (currentPreview !== container || !cardElement.isConnected) {{
-                anchorTrackerRafId = null;
-                return;
-            }}
+        // Core update: reads card rect and writes one transform string. Cheap.
+        function update() {{
+            if (currentPreview !== container || !cardElement.isConnected) return false;
             const cardRect = cardElement.getBoundingClientRect();
             const width = container.offsetWidth;
             const height = container.offsetHeight;
             const anchorX = Math.round(cardRect.left + cardRect.width / 2 - width / 2 + PREVIEW_OFFSET_X);
             const anchorY = Math.round(cardRect.top + cardRect.height / 2 - height / 2 + PREVIEW_OFFSET_Y);
             container.style.transform = `translate3d(${{anchorX}}px, ${{anchorY}}px, 0)`;
+            return true;
+        }}
+        function tick() {{
+            if (!update()) {{
+                anchorTrackerRafId = null;
+                return;
+            }}
             anchorTrackerRafId = requestAnimationFrame(tick);
         }}
+        // Scroll listener (capture-phase so we catch scroll on any inner
+        // scrollable ancestor of the card, including Jellyfin's inner scroll
+        // containers). Fires in sync with the browser's scroll pipeline, so
+        // the transform updates on the same frame the content scrolls —
+        // eliminates the visible drag seen when relying on rAF alone.
+        anchorScrollHandler = () => {{ update(); }};
+        window.addEventListener('scroll', anchorScrollHandler, {{ passive: true, capture: true }});
         anchorTrackerRafId = requestAnimationFrame(tick);
     }}
 
@@ -1315,6 +1403,10 @@ public class HoverTrailerController : ControllerBase
         if (anchorTrackerRafId !== null) {{
             cancelAnimationFrame(anchorTrackerRafId);
             anchorTrackerRafId = null;
+        }}
+        if (anchorScrollHandler !== null) {{
+            window.removeEventListener('scroll', anchorScrollHandler, {{ capture: true }});
+            anchorScrollHandler = null;
         }}
 
         // Remove persistent-preview dismissers if any were installed.

@@ -254,12 +254,20 @@
                                 <div class="fieldDescription">Video quality for YouTube trailer previews (higher quality uses more bandwidth)</div>
                             </div>
 
-                            <div class="checkboxContainer checkboxContainer-withDescription">
-                                <label class="emby-checkbox-label">
-                                    <input id="EnableBackgroundBlur" name="EnableBackgroundBlur" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
-                                    <span class="checkboxLabel">Enable Background Blur</span>
-                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
-                                <div class="fieldDescription">Blur the background behind the preview while trailer is playing</div>
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="BackgroundBlurMode">Background Blur Mode</label>
+                                <select id="BackgroundBlurMode" name="BackgroundBlurMode" is="emby-select" class="emby-select-withcolor emby-select">
+                                    <option value="Off">Off</option>
+                                    <option value="Full">Full (uniform full-screen blur)</option>
+                                    <option value="Halo">Halo (densest near the preview, fades with distance)</option>
+                                </select>
+                                <div class="fieldDescription">Blur the background behind the preview while a trailer is playing.</div>
+                            </div>
+
+                            <div class="inputContainer" id="haloRadiusContainer" style="display: none;">
+                                <label class="inputLabel inputLabelUnfocused" for="BackgroundBlurFalloffRadius">Halo Falloff Radius (px)</label>
+                                <input id="BackgroundBlurFalloffRadius" name="BackgroundBlurFalloffRadius" type="number" min="50" max="800" is="emby-input" />
+                                <div class="fieldDescription">Distance from the preview where the halo blur fades to nothing (50-800 px).</div>
                             </div>
 
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -325,13 +333,19 @@
                     document.querySelector('#EnablePreviewAudio').checked = config.EnablePreviewAudio || false;
                     document.querySelector('#PreviewVolume').value = config.PreviewVolume || 50;
                     document.querySelector('#RemoteVideoQuality').value = config.RemoteVideoQuality || 'adaptive';
-                    document.querySelector('#EnableBackgroundBlur').checked = config.EnableBackgroundBlur || false;
+                    // Background blur mode: migrate legacy EnableBackgroundBlur=true to Full when the new dropdown is unset.
+                    const blurMode = config.BackgroundBlurMode && config.BackgroundBlurMode !== 'Off'
+                        ? config.BackgroundBlurMode
+                        : (config.EnableBackgroundBlur ? 'Full' : (config.BackgroundBlurMode || 'Off'));
+                    document.querySelector('#BackgroundBlurMode').value = blurMode;
+                    document.querySelector('#BackgroundBlurFalloffRadius').value = config.BackgroundBlurFalloffRadius || 200;
                     document.querySelector('#EnableToastNotifications').checked = config.EnableToastNotifications !== false;
                     document.querySelector('#EnablePersistentPreview').checked = config.EnablePersistentPreview || false;
 
-                    // Update positioning and sizing mode visibility
+                    // Update positioning, sizing, and blur mode visibility
                     updatePositioningModeVisibility();
                     updateSizingModeVisibility();
+                    updateBlurModeVisibility();
 
                     // Trailer Fallback Settings
                     document.querySelector('#EnableThemeVideoFallback').checked = config.EnableThemeVideoFallback || false;
@@ -369,7 +383,10 @@
                     config.EnablePreviewAudio = document.querySelector('#EnablePreviewAudio').checked;
                     config.PreviewVolume = parseInt(document.querySelector('#PreviewVolume').value) || 50;
                     config.RemoteVideoQuality = document.querySelector('#RemoteVideoQuality').value || 'adaptive';
-                    config.EnableBackgroundBlur = document.querySelector('#EnableBackgroundBlur').checked;
+                    config.BackgroundBlurMode = document.querySelector('#BackgroundBlurMode').value || 'Off';
+                    config.BackgroundBlurFalloffRadius = parseInt(document.querySelector('#BackgroundBlurFalloffRadius').value) || 200;
+                    // Sync the legacy bool so older code paths don't see stale "true" once user picks a real mode.
+                    config.EnableBackgroundBlur = config.BackgroundBlurMode !== 'Off';
                     config.EnableToastNotifications = document.querySelector('#EnableToastNotifications').checked;
                     config.EnablePersistentPreview = document.querySelector('#EnablePersistentPreview').checked;
 
@@ -419,6 +436,11 @@
                 customPositionContainer.style.display = showOffsets ? 'block' : 'none';
             }
 
+            function updateBlurModeVisibility() {
+                const mode = document.querySelector('#BackgroundBlurMode').value;
+                document.querySelector('#haloRadiusContainer').style.display = mode === 'Halo' ? 'block' : 'none';
+            }
+
             document.querySelector("#HoverTrailerConfigPage").addEventListener("pageshow", () => {
                 loadConfiguration();
             });
@@ -434,6 +456,9 @@
 
             // Add event listener for positioning mode dropdown
             document.querySelector('#PreviewPositioningMode').addEventListener('change', updatePositioningModeVisibility);
+
+            // Add event listener for blur mode dropdown
+            document.querySelector('#BackgroundBlurMode').addEventListener('change', updateBlurModeVisibility);
         </script>
     </div>
 </body>
