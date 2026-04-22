@@ -458,6 +458,7 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
     const ENABLE_PERSISTENT_PREVIEW = {config.EnablePersistentPreview.ToString().ToLower()};
+    const ENABLE_FOCUS_TRIGGER = {config.EnableFocusTrigger.ToString().ToLower()};
 
     // Disable on touch devices: hover UX doesn't apply and mobile WebViews
     // exhibit freezes around iframe cleanup (issue #15).
@@ -1513,6 +1514,35 @@ public class HoverTrailerController : ControllerBase
                 hidePreview();
                 setTimeout(() => {{ isPlaying = false; }}, 2000);
             }});
+
+            // Optional: keyboard / D-pad focus also triggers the preview, for
+            // TV browsers and spatial-navigation users. The card itself is
+            // usually not focusable — Jellyfin's focusable element is an
+            // anchor inside (.cardImageContainer.itemAction) — but focusin
+            // bubbles, so the card-level listener catches descendant focus.
+            // Gate on event.target's :focus-visible (not the card's) so a
+            // mouse click that focuses the inner anchor does not re-fire.
+            if (ENABLE_FOCUS_TRIGGER) {{
+                card.addEventListener('focusin', (e) => {{
+                    if (isPlaying) return;
+                    const t = e.target;
+                    if (t && typeof t.matches === 'function' && !t.matches(':focus-visible')) return;
+                    clearTimeout(hoverTimeout);
+                    hoverTimeout = setTimeout(() => {{
+                        showPreview(card, itemId);
+                    }}, HOVER_DELAY);
+                    showProgressIndicator(card);
+                }});
+
+                card.addEventListener('focusout', (e) => {{
+                    // Ignore focus moves to another descendant of the same card.
+                    if (e.relatedTarget && card.contains(e.relatedTarget)) return;
+                    clearTimeout(hoverTimeout);
+                    hideProgressIndicator(card);
+                    if (ENABLE_PERSISTENT_PREVIEW && currentPreview) return;
+                    hidePreview();
+                }});
+            }}
         }});
 
         if (newCardsCount > 0) {{

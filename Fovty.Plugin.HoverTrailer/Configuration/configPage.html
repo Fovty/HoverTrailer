@@ -189,6 +189,14 @@
                                 <div class="fieldDescription">When enabled, the preview stays visible until you click anywhere, press Escape, or hover a different card long enough for a new preview to start.</div>
                             </div>
 
+                            <div class="checkboxContainer">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableFocusTrigger" name="EnableFocusTrigger" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Trigger preview on keyboard / D-pad focus</span>
+                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
+                                <div class="fieldDescription">For TV browsers and keyboard-driven navigation: focusing a card with Tab or arrow keys also starts the preview after the hover delay. Mouse clicks do not re-trigger.</div>
+                            </div>
+
                             <div class="selectContainer">
                                 <label class="selectLabel" for="PreviewSizingMode">Sizing Mode</label>
                                 <select id="PreviewSizingMode" name="PreviewSizingMode" is="emby-select" class="emby-select-withcolor emby-select">
@@ -341,6 +349,7 @@
                     document.querySelector('#BackgroundBlurFalloffRadius').value = config.BackgroundBlurFalloffRadius || 200;
                     document.querySelector('#EnableToastNotifications').checked = config.EnableToastNotifications !== false;
                     document.querySelector('#EnablePersistentPreview').checked = config.EnablePersistentPreview || false;
+                    document.querySelector('#EnableFocusTrigger').checked = config.EnableFocusTrigger || false;
 
                     // Update positioning, sizing, and blur mode visibility
                     updatePositioningModeVisibility();
@@ -389,6 +398,7 @@
                     config.EnableBackgroundBlur = config.BackgroundBlurMode !== 'Off';
                     config.EnableToastNotifications = document.querySelector('#EnableToastNotifications').checked;
                     config.EnablePersistentPreview = document.querySelector('#EnablePersistentPreview').checked;
+                    config.EnableFocusTrigger = document.querySelector('#EnableFocusTrigger').checked;
 
                     // Trailer Fallback Settings
                     config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;

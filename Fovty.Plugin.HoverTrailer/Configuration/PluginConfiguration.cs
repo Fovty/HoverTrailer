@@ -57,6 +57,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnablePersistentPreview { get; set; }
 
     /// <summary>
+    /// Gets or sets whether keyboard/D-pad focus on a card triggers the
+    /// preview in addition to mouse hover. Useful for Jellyfin Web running
+    /// in a TV browser with keyboard or remote-control navigation. Gated on
+    /// <c>:focus-visible</c> so mouse clicks don't re-fire the trailer.
+    /// </summary>
+    public bool EnableFocusTrigger { get; set; }
+
+    /// <summary>
     /// Gets or sets the preview width in pixels (Manual mode).
     /// </summary>
     public int PreviewWidth { get; set; } = 300;
