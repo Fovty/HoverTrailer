@@ -65,6 +65,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnableFocusTrigger { get; set; }
 
     /// <summary>
+    /// AnchorToCard only: when true, the preview is clamped to stay fully
+    /// inside the viewport. The preview follows the card while the card is
+    /// in view, then pins to the nearest viewport edge once the card
+    /// scrolls past — useful for keeping the trailer visible while browsing
+    /// adjacent cards. When false (default), the preview scrolls off with
+    /// its anchor card, matching the literal "anchor" semantics.
+    /// </summary>
+    public bool EnableAnchorPinToViewport { get; set; }
+
+    /// <summary>
     /// Gets or sets the preview width in pixels (Manual mode).
     /// </summary>
     public int PreviewWidth { get; set; } = 300;

@@ -181,6 +181,14 @@
                                 </div>
                             </div>
 
+                            <div class="checkboxContainer" id="anchorPinContainer">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableAnchorPinToViewport" name="EnableAnchorPinToViewport" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Pin preview to viewport</span>
+                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
+                                <div class="fieldDescription">Anchor to Card only. When enabled, the preview stays fully on-screen — it follows the card while visible, then pins to the nearest viewport edge once the card scrolls past. When disabled (default), the preview tracks the card literally and may clip at the screen edges or scroll out of view with its card.</div>
+                            </div>
+
                             <div class="checkboxContainer">
                                 <label class="emby-checkbox-label">
                                     <input id="EnablePersistentPreview" name="EnablePersistentPreview" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
@@ -350,6 +358,7 @@
                     document.querySelector('#EnableToastNotifications').checked = config.EnableToastNotifications !== false;
                     document.querySelector('#EnablePersistentPreview').checked = config.EnablePersistentPreview || false;
                     document.querySelector('#EnableFocusTrigger').checked = config.EnableFocusTrigger || false;
+                    document.querySelector('#EnableAnchorPinToViewport').checked = config.EnableAnchorPinToViewport || false;
 
                     // Update positioning, sizing, and blur mode visibility
                     updatePositioningModeVisibility();
@@ -399,6 +408,7 @@
                     config.EnableToastNotifications = document.querySelector('#EnableToastNotifications').checked;
                     config.EnablePersistentPreview = document.querySelector('#EnablePersistentPreview').checked;
                     config.EnableFocusTrigger = document.querySelector('#EnableFocusTrigger').checked;
+                    config.EnableAnchorPinToViewport = document.querySelector('#EnableAnchorPinToViewport').checked;
 
                     // Trailer Fallback Settings
                     config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;
@@ -444,6 +454,8 @@
                 // Offsets apply in Custom (viewport-relative) and AnchorToCard (card-relative).
                 const showOffsets = positioningMode === 'Custom' || positioningMode === 'AnchorToCard';
                 customPositionContainer.style.display = showOffsets ? 'block' : 'none';
+                // Pin to Viewport is meaningful only for AnchorToCard.
+                document.querySelector('#anchorPinContainer').style.display = positioningMode === 'AnchorToCard' ? 'block' : 'none';
             }
 
             function updateBlurModeVisibility() {

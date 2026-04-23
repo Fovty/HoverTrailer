@@ -459,6 +459,7 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
     const ENABLE_PERSISTENT_PREVIEW = {config.EnablePersistentPreview.ToString().ToLower()};
     const ENABLE_FOCUS_TRIGGER = {config.EnableFocusTrigger.ToString().ToLower()};
+    const ENABLE_ANCHOR_PIN_TO_VIEWPORT = {config.EnableAnchorPinToViewport.ToString().ToLower()};
 
     // Disable on touch devices: hover UX doesn't apply and mobile WebViews
     // exhibit freezes around iframe cleanup (issue #15).
@@ -886,9 +887,14 @@ public class HoverTrailerController : ControllerBase
             // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
             const rawX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
             const rawY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
-            const clamped = clampAnchorToViewport(rawX, rawY, containerWidth, containerHeight);
-            const anchorX = clamped.x;
-            const anchorY = clamped.y;
+            // Pin to Viewport keeps the preview fully on-screen by clamping
+            // the anchor; otherwise honour the literal card-tethered position
+            // (preview can clip at edges and scrolls off with its card).
+            const pinned = ENABLE_ANCHOR_PIN_TO_VIEWPORT
+                ? clampAnchorToViewport(rawX, rawY, containerWidth, containerHeight)
+                : {{ x: rawX, y: rawY }};
+            const anchorX = pinned.x;
+            const anchorY = pinned.y;
             containerStyles = `
                 position: fixed;
                 top: 0;
@@ -1040,9 +1046,14 @@ public class HoverTrailerController : ControllerBase
             // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
             const rawX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
             const rawY = Math.round(cardRect.top + cardRect.height / 2 - containerHeight / 2 + PREVIEW_OFFSET_Y);
-            const clamped = clampAnchorToViewport(rawX, rawY, containerWidth, containerHeight);
-            const anchorX = clamped.x;
-            const anchorY = clamped.y;
+            // Pin to Viewport keeps the preview fully on-screen by clamping
+            // the anchor; otherwise honour the literal card-tethered position
+            // (preview can clip at edges and scrolls off with its card).
+            const pinned = ENABLE_ANCHOR_PIN_TO_VIEWPORT
+                ? clampAnchorToViewport(rawX, rawY, containerWidth, containerHeight)
+                : {{ x: rawX, y: rawY }};
+            const anchorX = pinned.x;
+            const anchorY = pinned.y;
             containerStyles = `
                 position: fixed;
                 top: 0;
@@ -1119,9 +1130,11 @@ public class HoverTrailerController : ControllerBase
             const height = container.offsetHeight;
             const rawX = Math.round(cardRect.left + cardRect.width / 2 - width / 2 + PREVIEW_OFFSET_X);
             const rawY = Math.round(cardRect.top + cardRect.height / 2 - height / 2 + PREVIEW_OFFSET_Y);
-            const clamped = clampAnchorToViewport(rawX, rawY, width, height);
-            const anchorX = clamped.x;
-            const anchorY = clamped.y;
+            const pinned = ENABLE_ANCHOR_PIN_TO_VIEWPORT
+                ? clampAnchorToViewport(rawX, rawY, width, height)
+                : {{ x: rawX, y: rawY }};
+            const anchorX = pinned.x;
+            const anchorY = pinned.y;
             container.style.transform = `translate3d(${{anchorX}}px, ${{anchorY}}px, 0)`;
             // Layout shifts (card images loading, scrollbar appearing) reposition
             // the preview off-scroll. The halo's scroll-only listener won't catch
