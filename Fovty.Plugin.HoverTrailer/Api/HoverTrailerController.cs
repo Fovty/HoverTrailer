@@ -694,10 +694,13 @@ public class HoverTrailerController : ControllerBase
         log('Background blur applied (' + BACKGROUND_BLUR_MODE + ')');
     }}
 
-    // Renders the halo SVG mask once. Cutout coordinates are in the inflated
-    // backdrop's local space (i.e., (HALO_INFLATE, HALO_INFLATE) maps to
-    // viewport (0, 0)). We capture the preview's current viewport position so
-    // trackHaloPosition can compute a delta translation on scroll.
+    // Renders the halo SVG mask. The mask is a single blurred white rect
+    // centred on the preview — no inner cutout. The preview container itself
+    // (z-index 10000, opaque background) sits in front of the backdrop and
+    // covers the blur naturally where the video is, so the halo can never
+    // visually misalign with the trailer edge. Coordinates are in the
+    // inflated backdrop's local space ((HALO_INFLATE, HALO_INFLATE) → viewport
+    // origin); trackHaloPosition translates the backdrop on scroll.
     function renderHaloMask(backdrop) {{
         if (!currentPreview) return;
         const rect = currentPreview.getBoundingClientRect();
@@ -716,7 +719,7 @@ public class HoverTrailerController : ControllerBase
         const vW = Math.round(rect.width);
         const vH = Math.round(rect.height);
         const br = PREVIEW_BORDER_RADIUS;
-        const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${{CW}} ${{CH}}' preserveAspectRatio='none'><defs><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='${{blurStd}}'/></filter></defs><rect width='100%' height='100%' fill='black'/><rect x='${{vL - r}}' y='${{vT - r}}' width='${{vW + 2 * r}}' height='${{vH + 2 * r}}' rx='${{br + r}}' ry='${{br + r}}' fill='white' filter='url(#b)'/><rect x='${{vL}}' y='${{vT}}' width='${{vW}}' height='${{vH}}' rx='${{br}}' ry='${{br}}' fill='black'/></svg>`;
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${{CW}} ${{CH}}' preserveAspectRatio='none'><defs><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='${{blurStd}}'/></filter></defs><rect width='100%' height='100%' fill='black'/><rect x='${{vL - r}}' y='${{vT - r}}' width='${{vW + 2 * r}}' height='${{vH + 2 * r}}' rx='${{br + r}}' ry='${{br + r}}' fill='white' filter='url(#b)'/></svg>`;
         const url = `url(""data:image/svg+xml;utf8,${{encodeURIComponent(svg)}}"")`;
         backdrop.style.maskImage = url;
         backdrop.style.webkitMaskImage = url;
@@ -870,6 +873,7 @@ public class HoverTrailerController : ControllerBase
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
                 overflow: hidden;
+                background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
                 z-index: 10000;
                 pointer-events: none;
@@ -894,6 +898,7 @@ public class HoverTrailerController : ControllerBase
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
                 overflow: hidden;
+                background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
                 z-index: 10000;
                 pointer-events: none;
@@ -911,6 +916,7 @@ public class HoverTrailerController : ControllerBase
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
                 overflow: hidden;
+                background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
                 z-index: 10000;
                 pointer-events: none;
@@ -1021,6 +1027,7 @@ public class HoverTrailerController : ControllerBase
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
                 overflow: hidden;
+                background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
                 z-index: 10000;
                 pointer-events: none;
@@ -1045,6 +1052,7 @@ public class HoverTrailerController : ControllerBase
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
                 overflow: hidden;
+                background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
                 z-index: 10000;
                 pointer-events: none;
@@ -1063,6 +1071,7 @@ public class HoverTrailerController : ControllerBase
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
                 overflow: hidden;
+                background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
                 z-index: 10000;
                 pointer-events: none;
