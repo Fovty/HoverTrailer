@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MediaBrowser.Model.Plugins;
-using Fovty.Plugin.HoverTrailer.Exceptions;
 
 namespace Fovty.Plugin.HoverTrailer.Configuration;
 
@@ -157,19 +156,6 @@ public class PluginConfiguration : BasePluginConfiguration
 
 
     /// <summary>
-    /// Validates the current configuration and throws ConfigurationException if invalid.
-    /// </summary>
-    /// <exception cref="ConfigurationException">Thrown when configuration is invalid.</exception>
-    public void Validate()
-    {
-        var errors = GetValidationErrors().ToList();
-        if (errors.Any())
-        {
-            throw new ConfigurationException($"Configuration validation failed: {string.Join("; ", errors)}");
-        }
-    }
-
-    /// <summary>
     /// Gets all validation errors for the current configuration.
     /// </summary>
     /// <returns>An enumerable of validation error messages.</returns>
@@ -240,10 +226,9 @@ public class PluginConfiguration : BasePluginConfiguration
 
         // Preview sizing mode validation
         if (!string.Equals(PreviewSizingMode, "Manual", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewSizingMode, "Percentage", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(PreviewSizingMode, "FitContent", StringComparison.OrdinalIgnoreCase))
         {
-            yield return "Preview Sizing Mode must be 'Manual', 'Percentage', or 'FitContent'";
+            yield return "Preview Sizing Mode must be 'Manual' or 'FitContent'";
         }
 
         // Preview positioning mode validation
@@ -290,121 +275,5 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool IsValid()
     {
         return !GetValidationErrors().Any();
-    }
-
-    /// <summary>
-    /// Validates a specific configuration property.
-    /// </summary>
-    /// <param name="propertyName">The name of the property to validate.</param>
-    /// <returns>Validation error message if invalid, null if valid.</returns>
-    public string? ValidateProperty(string propertyName)
-    {
-        return propertyName switch
-        {
-            nameof(HoverDelayMs) => ValidateHoverDelayMs(),
-            nameof(PreviewOffsetX) => ValidatePreviewOffsetX(),
-            nameof(PreviewOffsetY) => ValidatePreviewOffsetY(),
-            nameof(PreviewWidth) => ValidatePreviewWidth(),
-            nameof(PreviewHeight) => ValidatePreviewHeight(),
-            nameof(PreviewOpacity) => ValidatePreviewOpacity(),
-            nameof(PreviewBorderRadius) => ValidatePreviewBorderRadius(),
-            nameof(PreviewSizePercentage) => ValidatePreviewSizePercentage(),
-            nameof(PreviewVolume) => ValidatePreviewVolume(),
-            nameof(RemoteVideoQuality) => ValidateRemoteVideoQuality(),
-            nameof(PreviewSizingMode) => ValidatePreviewSizingMode(),
-            nameof(PreviewPositioningMode) => ValidatePreviewPositioningMode(),
-            _ => null
-        };
-    }
-
-    private string? ValidateHoverDelayMs()
-    {
-        if (HoverDelayMs < 0)
-            return "Hover Delay cannot be negative";
-        if (HoverDelayMs > 10000)
-            return "Hover Delay cannot exceed 10000ms (10 seconds)";
-        return null;
-    }
-
-    private string? ValidatePreviewOffsetX()
-    {
-        if (PreviewOffsetX < -2000 || PreviewOffsetX > 2000)
-            return "Preview Offset X must be between -2000 and 2000 pixels";
-        return null;
-    }
-
-    private string? ValidatePreviewOffsetY()
-    {
-        if (PreviewOffsetY < -2000 || PreviewOffsetY > 2000)
-            return "Preview Offset Y must be between -2000 and 2000 pixels";
-        return null;
-    }
-
-    private string? ValidatePreviewWidth()
-    {
-        if (PreviewWidth < 200 || PreviewWidth > 800)
-            return "Preview Width must be between 200 and 800 pixels";
-        return null;
-    }
-
-    private string? ValidatePreviewHeight()
-    {
-        if (PreviewHeight < 150 || PreviewHeight > 600)
-            return "Preview Height must be between 150 and 600 pixels";
-        return null;
-    }
-
-    private string? ValidatePreviewOpacity()
-    {
-        if (PreviewOpacity < 0.0 || PreviewOpacity > 1.0)
-            return "Preview Opacity must be between 0.0 and 1.0";
-        return null;
-    }
-
-    private string? ValidatePreviewBorderRadius()
-    {
-        if (PreviewBorderRadius < 0 || PreviewBorderRadius > 50)
-            return "Preview Border Radius must be between 0 and 50 pixels";
-        return null;
-    }
-
-    private string? ValidatePreviewSizePercentage()
-    {
-        if (PreviewSizePercentage < 50 || PreviewSizePercentage > 1500)
-            return "Preview Size Percentage must be between 50 and 1500";
-        return null;
-    }
-
-    private string? ValidatePreviewVolume()
-    {
-        if (PreviewVolume < 0 || PreviewVolume > 100)
-            return "Preview Volume must be between 0 and 100";
-        return null;
-    }
-
-    private string? ValidateRemoteVideoQuality()
-    {
-        var validQualities = new[] { "adaptive", "hd480", "hd720", "hd1080", "hd2160" };
-        if (!validQualities.Any(q => string.Equals(q, RemoteVideoQuality, StringComparison.OrdinalIgnoreCase)))
-            return "Remote Video Quality must be one of: adaptive, hd480, hd720, hd1080, hd2160";
-        return null;
-    }
-
-    private string? ValidatePreviewSizingMode()
-    {
-        if (!string.Equals(PreviewSizingMode, "Manual", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewSizingMode, "Percentage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewSizingMode, "FitContent", StringComparison.OrdinalIgnoreCase))
-            return "Preview Sizing Mode must be 'Manual', 'Percentage', or 'FitContent'";
-        return null;
-    }
-
-    private string? ValidatePreviewPositioningMode()
-    {
-        if (!string.Equals(PreviewPositioningMode, "Center", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewPositioningMode, "Custom", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(PreviewPositioningMode, "AnchorToCard", StringComparison.OrdinalIgnoreCase))
-            return "Preview Positioning Mode must be 'Center', 'Custom', or 'AnchorToCard'";
-        return null;
     }
 }

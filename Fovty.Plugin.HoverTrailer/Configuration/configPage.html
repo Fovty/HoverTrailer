@@ -125,12 +125,6 @@
                                 <div class="fieldDescription">Delay before showing hover preview (100-10000 milliseconds)</div>
                             </div>
 
-                            <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="PreviewDurationMs">Preview Duration (ms)</label>
-                                <input id="PreviewDurationMs" name="PreviewDurationMs" type="number" min="5000" max="60000" is="emby-input" />
-                                <div class="fieldDescription">How long to show the preview (5000-60000 milliseconds)</div>
-                            </div>
-
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label class="emby-checkbox-label">
                                     <input id="EnableThemeVideoFallback" name="EnableThemeVideoFallback" type="checkbox" is="emby-checkbox" />
@@ -334,7 +328,6 @@
                     document.querySelector('#EnableHoverPreview').checked = config.EnableHoverPreview !== false;
                     document.querySelector('#InjectClientScript').checked = config.InjectClientScript !== false;
                     document.querySelector('#HoverDelayMs').value = config.HoverDelayMs || 1000;
-                    document.querySelector('#PreviewDurationMs').value = config.PreviewDurationMs || 30000;
 
                     // Hover Preview Customization
                     document.querySelector('#PreviewPositioningMode').value = config.PreviewPositioningMode || 'Center';
@@ -386,7 +379,6 @@
                     config.EnableHoverPreview = document.querySelector('#EnableHoverPreview').checked;
                     config.InjectClientScript = document.querySelector('#InjectClientScript').checked;
                     config.HoverDelayMs = parseInt(document.querySelector('#HoverDelayMs').value) || 1000;
-                    config.PreviewDurationMs = parseInt(document.querySelector('#PreviewDurationMs').value) || 30000;
 
                     // Hover Preview Customization
                     config.PreviewPositioningMode = document.querySelector('#PreviewPositioningMode').value || 'Center';
