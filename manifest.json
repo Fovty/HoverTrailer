@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.8.1",
+        "changelog": "- chore(config): update default settings for new installs\n- chore(config): remove dead orphan field, methods, and ghost sizing mode",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.8.1/HoverTrailer-0.2.8.1-server.zip",
+        "checksum": "a14f2b09880f216d55da5cebf6544eda",
+        "timestamp": "2026-04-23T20:49:37Z"
+      },
+      {
         "version": "0.2.8.0",
         "changelog": "- feat(anchor): make viewport clamp opt-in via Pin to Viewport\n- fix(halo): drop SVG cutout, let opaque container cover the blur\n- fix(resize): dismiss preview on window resize\n- fix(anchor): clamp AnchorToCard previews inside the viewport\n- fix(halo): re-render mask on size change and drive halo from rAF tick\n- docs: refresh README for v0.2.7.0 features and trim filler\n- fix(release): restore truncated v0.2.7.0 changelog in manifest\n- fix(ci): stop truncating release changelog to 200 chars",
         "targetAbi": "10.11.0.0",
