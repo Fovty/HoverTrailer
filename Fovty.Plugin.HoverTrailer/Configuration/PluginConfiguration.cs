@@ -35,7 +35,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets the vertical offset from default position in pixels.
     /// </summary>
-    public int PreviewOffsetY { get; set; } = 0;
+    public int PreviewOffsetY { get; set; } = -25;
 
     /// <summary>
     /// Gets or sets the preview sizing mode (Manual or FitContent).
@@ -45,7 +45,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets the preview positioning mode (Center, Custom, or AnchorToCard).
     /// </summary>
-    public string PreviewPositioningMode { get; set; } = "Center";
+    public string PreviewPositioningMode { get; set; } = "AnchorToCard";
 
     /// <summary>
     /// Gets or sets whether the preview should keep playing after the cursor
@@ -53,7 +53,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// anywhere, pressing Escape, or hovering a different card long enough
     /// for a new preview to start.
     /// </summary>
-    public bool EnablePersistentPreview { get; set; }
+    public bool EnablePersistentPreview { get; set; } = true;
 
     /// <summary>
     /// Gets or sets whether keyboard/D-pad focus on a card triggers the
@@ -125,7 +125,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the background blur mode: "Off", "Full" (uniform blur),
     /// or "Halo" (rectangular falloff blur around the preview).
     /// </summary>
-    public string BackgroundBlurMode { get; set; } = "Off";
+    public string BackgroundBlurMode { get; set; } = "Halo";
 
     /// <summary>
     /// Gets or sets the falloff radius in pixels for Halo blur mode. The
@@ -142,12 +142,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets a value indicating whether to enable debug logging.
     /// </summary>
-    public bool EnableDebugLogging { get; set; } = true;
+    public bool EnableDebugLogging { get; set; } = false;
 
     /// <summary>
     /// Gets or sets a value indicating whether to fall back to the item's theme video when no trailer is available.
     /// </summary>
-    public bool EnableThemeVideoFallback { get; set; } = false;
+    public bool EnableThemeVideoFallback { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show a progress indicator on the card during hover delay.
