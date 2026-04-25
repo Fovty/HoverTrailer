@@ -74,6 +74,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnableAnchorPinToViewport { get; set; }
 
     /// <summary>
+    /// Show interactive trailer controls (play/pause, seek, volume,
+    /// fullscreen) over YouTube previews. Requires <see cref="EnablePersistentPreview"/>
+    /// — without persistence the preview is dismissed when the cursor
+    /// leaves the card before the controls can be reached. The plugin
+    /// auto-suppresses the controls when persistence is disabled regardless
+    /// of this setting.
+    /// </summary>
+    public bool EnableTrailerControls { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the preview width in pixels (Manual mode).
     /// </summary>
     public int PreviewWidth { get; set; } = 300;

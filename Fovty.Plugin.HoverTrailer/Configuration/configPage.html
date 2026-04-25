@@ -191,6 +191,14 @@
                                 <div class="fieldDescription">When enabled, the preview stays visible until you click anywhere, press Escape, or hover a different card long enough for a new preview to start.</div>
                             </div>
 
+                            <div class="checkboxContainer" id="trailerControlsContainer">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableTrailerControls" name="EnableTrailerControls" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Show trailer controls (play/pause, seek, volume, fullscreen)</span>
+                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
+                                <div class="fieldDescription">Overlay an interactive control bar on YouTube previews. Requires the persistent option above — without it the preview is dismissed when the cursor leaves the card before you can reach the controls.</div>
+                            </div>
+
                             <div class="checkboxContainer">
                                 <label class="emby-checkbox-label">
                                     <input id="EnableFocusTrigger" name="EnableFocusTrigger" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
@@ -352,11 +360,13 @@
                     document.querySelector('#EnablePersistentPreview').checked = config.EnablePersistentPreview || false;
                     document.querySelector('#EnableFocusTrigger').checked = config.EnableFocusTrigger || false;
                     document.querySelector('#EnableAnchorPinToViewport').checked = config.EnableAnchorPinToViewport || false;
+                    document.querySelector('#EnableTrailerControls').checked = config.EnableTrailerControls !== false;
 
                     // Update positioning, sizing, and blur mode visibility
                     updatePositioningModeVisibility();
                     updateSizingModeVisibility();
                     updateBlurModeVisibility();
+                    updateTrailerControlsVisibility();
 
                     // Trailer Fallback Settings
                     document.querySelector('#EnableThemeVideoFallback').checked = config.EnableThemeVideoFallback || false;
@@ -401,6 +411,7 @@
                     config.EnablePersistentPreview = document.querySelector('#EnablePersistentPreview').checked;
                     config.EnableFocusTrigger = document.querySelector('#EnableFocusTrigger').checked;
                     config.EnableAnchorPinToViewport = document.querySelector('#EnableAnchorPinToViewport').checked;
+                    config.EnableTrailerControls = document.querySelector('#EnableTrailerControls').checked;
 
                     // Trailer Fallback Settings
                     config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;
@@ -455,6 +466,13 @@
                 document.querySelector('#haloRadiusContainer').style.display = mode === 'Halo' ? 'block' : 'none';
             }
 
+            // Trailer controls only make sense when the preview persists past
+            // the cursor — without persistence the user can't reach them.
+            function updateTrailerControlsVisibility() {
+                const persistent = document.querySelector('#EnablePersistentPreview').checked;
+                document.querySelector('#trailerControlsContainer').style.display = persistent ? 'block' : 'none';
+            }
+
             document.querySelector("#HoverTrailerConfigPage").addEventListener("pageshow", () => {
                 loadConfiguration();
             });
@@ -473,6 +491,9 @@
 
             // Add event listener for blur mode dropdown
             document.querySelector('#BackgroundBlurMode').addEventListener('change', updateBlurModeVisibility);
+
+            // Toggle trailer-controls field whenever persistent preview changes
+            document.querySelector('#EnablePersistentPreview').addEventListener('change', updateTrailerControlsVisibility);
         </script>
     </div>
 </body>

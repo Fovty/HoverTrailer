@@ -477,6 +477,11 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_PERSISTENT_PREVIEW = {config.EnablePersistentPreview.ToString().ToLower()};
     const ENABLE_FOCUS_TRIGGER = {config.EnableFocusTrigger.ToString().ToLower()};
     const ENABLE_ANCHOR_PIN_TO_VIEWPORT = {config.EnableAnchorPinToViewport.ToString().ToLower()};
+    // Effective gating: trailer controls require Persistent Preview to be
+    // useful (otherwise the preview vanishes on mouseleave before the user
+    // can reach the controls). Compute the effective bool server-side so the
+    // JS doesn't have to re-check.
+    const ENABLE_TRAILER_CONTROLS = {(config.EnablePersistentPreview && config.EnableTrailerControls).ToString().ToLower()};
 
     // Disable on touch devices: hover UX doesn't apply and mobile WebViews
     // exhibit freezes around iframe cleanup (issue #15).
@@ -502,6 +507,15 @@ public class HoverTrailerController : ControllerBase
     let blurHaloAnchorWidth = 0;     // preview size when mask was rendered — re-render on change
     let blurHaloAnchorHeight = 0;
     let persistentDismissHandlers = null; // {{click, keydown}} when ENABLE_PERSISTENT_PREVIEW is active
+    // After exiting fullscreen, the same Escape press would otherwise cascade
+    // into hidePreview(). The trailer controls' fullscreenchange listener
+    // sets this flag for ~250 ms to swallow that follow-up Escape.
+    let suppressEscapeOnce = false;
+    // Browsers fire a 'resize' event AFTER fullscreenchange has already
+    // cleared document.fullscreenElement when exiting FS. Without a guard,
+    // resizeHandler sees no fullscreen and tears down the preview. Set
+    // this in fullscreenchange and check in resizeHandler.
+    let recentFsExit = false;
 
     // Inflate the halo backdrop beyond the viewport so we can translate it
     // freely during scroll without exposing unblurred edges.
@@ -585,6 +599,179 @@ public class HoverTrailerController : ControllerBase
         }}
     `;
     document.head.appendChild(toastStyles);
+
+    // Trailer controls styles (play/pause, seek, volume, fullscreen overlay)
+    const trailerControlsStyles = document.createElement('style');
+    trailerControlsStyles.textContent = `
+        .ht-controls {{
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 36px 12px 10px;
+            color: #fff;
+            z-index: 2;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: auto;
+            font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            user-select: none;
+            box-sizing: border-box;
+        }}
+        .ht-controls-bg {{
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
+            pointer-events: none;
+            z-index: -1;
+        }}
+        .ht-controls.visible {{ opacity: 1; }}
+        .ht-control-btn {{
+            flex: 0 0 auto;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease;
+        }}
+        .ht-control-btn:hover {{ background: rgba(255, 255, 255, 0.18); }}
+        .ht-control-btn:active {{ background: rgba(255, 255, 255, 0.28); }}
+        .ht-control-btn svg {{ width: 20px; height: 20px; display: block; }}
+        .ht-time {{
+            font-variant-numeric: tabular-nums;
+            flex: 0 0 auto;
+            min-width: 32px;
+            text-align: center;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+        }}
+        /* Seek + volume sliders use a 16px tall clickable area with a 4px
+           visible track centred inside — so the visual line stays thin but
+           the user has a comfortable hit zone to drag. */
+        .ht-seek {{
+            flex: 1 1 auto;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 16px;
+            background: transparent;
+            cursor: pointer;
+            margin: 0;
+            padding: 0;
+            min-width: 40px;
+            outline: none;
+        }}
+        .ht-seek::-webkit-slider-runnable-track {{
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }}
+        .ht-seek::-moz-range-track {{
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            border: none;
+        }}
+        .ht-seek::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            margin-top: -4px;
+            border-radius: 50%;
+            background: #00a4dc;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        }}
+        .ht-seek::-moz-range-thumb {{
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00a4dc;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        }}
+        .ht-volume-wrap {{
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 0 0 auto;
+        }}
+        .ht-volume {{
+            -webkit-appearance: none;
+            appearance: none;
+            width: 60px;
+            height: 14px;
+            background: transparent;
+            cursor: pointer;
+            margin: 0;
+            padding: 0;
+            outline: none;
+        }}
+        .ht-volume::-webkit-slider-runnable-track {{
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }}
+        .ht-volume::-moz-range-track {{
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            border: none;
+        }}
+        .ht-volume::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            width: 10px;
+            height: 10px;
+            margin-top: -3px;
+            border-radius: 50%;
+            background: #fff;
+            border: none;
+            cursor: pointer;
+        }}
+        .ht-volume::-moz-range-thumb {{
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fff;
+            border: none;
+            cursor: pointer;
+        }}
+        /* Invisible mask over the iframe — absorbs clicks/taps so YouTube's
+           player doesn't show its native tap-feedback overlay. Mouse events
+           still drive control visibility. Sits above the iframe but below
+           the controls bar. */
+        .ht-iframe-mask {{
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background: transparent;
+            pointer-events: auto;
+            cursor: default;
+        }}
+        /* In fullscreen the iframe must fill the FS surface (override the
+           inline transform/size set for the small preview). */
+        :fullscreen iframe[id^=""youtube-preview-""] {{
+            width: 100vw !important;
+            height: 100vh !important;
+            transform: none !important;
+            top: 0 !important;
+            left: 0 !important;
+        }}
+        :fullscreen .ht-controls {{ opacity: 0; }}
+        :fullscreen:hover .ht-controls,
+        :fullscreen .ht-controls:hover {{ opacity: 1; }}
+    `;
+    document.head.appendChild(trailerControlsStyles);
 
     // Progress indicator styles
     const progressStyles = document.createElement('style');
@@ -890,6 +1077,12 @@ public class HoverTrailerController : ControllerBase
                 width: ${{containerWidth}}px;
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                /* Compositor-level clip — overflow:hidden + border-radius
+                   isn't enough when the iframe child has transform: scale(),
+                   which puts it on its own GPU layer that escapes the
+                   parent's rounded clip in Chromium. clip-path forces strict
+                   raster clipping so the corners stay round. */
+                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
                 overflow: hidden;
                 background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -914,12 +1107,22 @@ public class HoverTrailerController : ControllerBase
             const anchorY = pinned.y;
             containerStyles = `
                 position: fixed;
-                top: 0;
-                left: 0;
-                transform: translate3d(${{anchorX}}px, ${{anchorY}}px, 0);
+                top: ${{anchorY}}px;
+                left: ${{anchorX}}px;
                 width: ${{containerWidth}}px;
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                /* Compositor-level clip — overflow:hidden + border-radius
+                   isn't enough when the iframe child has transform: scale(),
+                   which puts it on its own GPU layer that escapes the
+                   parent's rounded clip in Chromium. clip-path forces strict
+                   raster clipping so the corners stay round.
+                   Also: positioning via top/left here (instead of
+                   transform: translate3d) is a Chromium workaround — any
+                   transform on this container makes its own bottom-left
+                   corner refuse to clip, regardless of border-radius /
+                   clip-path / overflow:hidden combination. */
+                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
                 overflow: hidden;
                 background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -927,7 +1130,6 @@ public class HoverTrailerController : ControllerBase
                 pointer-events: none;
                 opacity: 0;
                 transition: opacity 0.3s ease;
-                will-change: transform;
             `;
         }} else {{
             containerStyles = `
@@ -938,6 +1140,12 @@ public class HoverTrailerController : ControllerBase
                 width: ${{containerWidth}}px;
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                /* Compositor-level clip — overflow:hidden + border-radius
+                   isn't enough when the iframe child has transform: scale(),
+                   which puts it on its own GPU layer that escapes the
+                   parent's rounded clip in Chromium. clip-path forces strict
+                   raster clipping so the corners stay round. */
+                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
                 overflow: hidden;
                 background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -959,6 +1167,14 @@ public class HoverTrailerController : ControllerBase
         // container exactly with no sub-pixel sliver (Bug 2 fix preserved).
         const scaleX = containerWidth / NATIVE_IFRAME_DIMS.w;
         const scaleY = containerHeight / NATIVE_IFRAME_DIMS.h;
+        // clip-path on the container fails to clip the iframe at extreme
+        // scale ratios (e.g. hd2160 = 3840×2160 native scaled to ~640px) —
+        // Chromium's compositor renders the iframe in its own GPU layer
+        // that escapes the parent's rounded clip. Applying clip-path on
+        // the IFRAME ITSELF in pre-transform coordinates fixes this. The
+        // radius must be scaled up by 1/scale so it lands at the user-set
+        // PREVIEW_BORDER_RADIUS after the transform.
+        const iframeClipRadius = Math.round(PREVIEW_BORDER_RADIUS / scaleX);
         iframe.style.cssText = `
             position: absolute;
             top: 0;
@@ -968,6 +1184,7 @@ public class HoverTrailerController : ControllerBase
             border: none;
             transform: scale(${{scaleX}}, ${{scaleY}});
             transform-origin: 0 0;
+            clip-path: inset(0 round ${{iframeClipRadius}}px);
         `;
         iframe.width = NATIVE_IFRAME_DIMS.w;
         iframe.height = NATIVE_IFRAME_DIMS.h;
@@ -977,13 +1194,31 @@ public class HoverTrailerController : ControllerBase
         // to be blocked because the iframe's allow='autoplay' delegation
         // wasn't applied when Chrome/Safari committed the navigation).
         iframe.id = 'youtube-preview-' + Date.now();
-        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture';
         iframe.setAttribute('allowfullscreen', '');
         iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
         iframe.setAttribute('frameborder', '0');
         iframe.dataset.pendingSrc = embedUrl;
 
         container.appendChild(iframe);
+
+        // Always-on JS loop handler (replaces YouTube's loop=playlist
+        // mechanism). Subscribes to playerInfo on iframe load and restarts
+        // playback when the video reaches the end. Cleanup on hidePreview.
+        const cleanupLoop = attachYouTubeLoopHandler(iframe);
+        iframe.addEventListener('load', () => {{
+            ytSubscribe(iframe);
+            setTimeout(() => ytSubscribe(iframe), 500);
+            setTimeout(() => ytSubscribe(iframe), 1500);
+        }});
+        container._htLoopCleanup = cleanupLoop;
+
+        // Trailer controls overlay (issue #18). Server-side gating already
+        // disabled this when persistent preview is off, so we don't re-check.
+        if (ENABLE_TRAILER_CONTROLS) {{
+            attachTrailerControls(container, iframe);
+        }}
+
         log('Created YouTube preview iframe (src deferred until DOM attach):', embedUrl);
 
         // Set up YouTube IFrame API for volume and quality control
@@ -1058,6 +1293,12 @@ public class HoverTrailerController : ControllerBase
                 width: ${{containerWidth}}px;
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                /* Compositor-level clip — overflow:hidden + border-radius
+                   isn't enough when the iframe child has transform: scale(),
+                   which puts it on its own GPU layer that escapes the
+                   parent's rounded clip in Chromium. clip-path forces strict
+                   raster clipping so the corners stay round. */
+                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
                 overflow: hidden;
                 background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -1082,12 +1323,22 @@ public class HoverTrailerController : ControllerBase
             const anchorY = pinned.y;
             containerStyles = `
                 position: fixed;
-                top: 0;
-                left: 0;
-                transform: translate3d(${{anchorX}}px, ${{anchorY}}px, 0);
+                top: ${{anchorY}}px;
+                left: ${{anchorX}}px;
                 width: ${{containerWidth}}px;
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                /* Compositor-level clip — overflow:hidden + border-radius
+                   isn't enough when the iframe child has transform: scale(),
+                   which puts it on its own GPU layer that escapes the
+                   parent's rounded clip in Chromium. clip-path forces strict
+                   raster clipping so the corners stay round.
+                   Also: positioning via top/left here (instead of
+                   transform: translate3d) is a Chromium workaround — any
+                   transform on this container makes its own bottom-left
+                   corner refuse to clip, regardless of border-radius /
+                   clip-path / overflow:hidden combination. */
+                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
                 overflow: hidden;
                 background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -1095,7 +1346,6 @@ public class HoverTrailerController : ControllerBase
                 pointer-events: none;
                 opacity: 0;
                 transition: opacity 0.3s ease;
-                will-change: transform;
             `;
         }} else {{
             // Custom positioning relative to card with offsets
@@ -1107,6 +1357,12 @@ public class HoverTrailerController : ControllerBase
                 width: ${{containerWidth}}px;
                 height: ${{containerHeight}}px;
                 border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+                /* Compositor-level clip — overflow:hidden + border-radius
+                   isn't enough when the iframe child has transform: scale(),
+                   which puts it on its own GPU layer that escapes the
+                   parent's rounded clip in Chromium. clip-path forces strict
+                   raster clipping so the corners stay round. */
+                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
                 overflow: hidden;
                 background: #000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.5);
@@ -1143,6 +1399,286 @@ public class HoverTrailerController : ControllerBase
         return container;
     }}
 
+    // ── Trailer controls (issue #18): play/pause, seek, volume, fullscreen ──
+    // Icon set — inline SVG so we don't add an external dependency. Each
+    // path is the standard Material-Symbols play / pause / volume / fullscreen
+    // glyph, simplified for inline use.
+    const ICON_PLAY     = `<svg viewBox=""0 0 24 24""><path d=""M8 5v14l11-7z"" fill=""currentColor""/></svg>`;
+    const ICON_PAUSE    = `<svg viewBox=""0 0 24 24""><path d=""M6 19h4V5H6v14zm8-14v14h4V5h-4z"" fill=""currentColor""/></svg>`;
+    const ICON_VOL      = `<svg viewBox=""0 0 24 24""><path d=""M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"" fill=""currentColor""/></svg>`;
+    const ICON_VOL_MUTE = `<svg viewBox=""0 0 24 24""><path d=""M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"" fill=""currentColor""/></svg>`;
+    const ICON_FS_ENTER = `<svg viewBox=""0 0 24 24""><path d=""M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"" fill=""currentColor""/></svg>`;
+    const ICON_FS_EXIT  = `<svg viewBox=""0 0 24 24""><path d=""M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"" fill=""currentColor""/></svg>`;
+
+    function fmtTime(secs) {{
+        if (!isFinite(secs) || secs < 0) return '0:00';
+        const m = Math.floor(secs / 60);
+        const s = Math.floor(secs % 60).toString().padStart(2, '0');
+        return m + ':' + s;
+    }}
+
+    // Send a YouTube IFrame Player API command via postMessage.
+    // youtube-nocookie's player listens on its own contentWindow when
+    // enablejsapi=1 is in the embed URL.
+    function ytCommand(iframe, func, args) {{
+        if (!iframe || !iframe.contentWindow) return;
+        try {{
+            iframe.contentWindow.postMessage(JSON.stringify({{
+                event: 'command',
+                func: func,
+                args: args || []
+            }}), '*');
+        }} catch (e) {{
+            log('ytCommand failed:', func, e);
+        }}
+    }}
+
+    // Manual single-video loop handler. Runs unconditionally for all
+    // YouTube previews (controls or not). Subscribes to playerInfo and
+    // restarts the video when it ends (playerState === 0). Replaces the
+    // legacy &loop=1&playlist=... URL params that triggered YouTube's
+    // playlist navigation UI (prev/pause/next icons in the centre).
+    // Returns a cleanup function for hidePreview.
+    function attachYouTubeLoopHandler(iframe) {{
+        const onMessage = (e) => {{
+            if (!e.origin || e.origin.indexOf('youtube') === -1) return;
+            if (e.source !== iframe.contentWindow) return;
+            let data;
+            try {{ data = JSON.parse(e.data); }} catch (_) {{ return; }}
+            if (data.event !== 'infoDelivery' || !data.info) return;
+            if (data.info.playerState === 0) {{
+                ytCommand(iframe, 'seekTo', [0, true]);
+                ytCommand(iframe, 'playVideo');
+            }}
+        }};
+        window.addEventListener('message', onMessage);
+        return () => window.removeEventListener('message', onMessage);
+    }}
+
+    // Subscribe to the YouTube playerInfo channel — the iframe will then
+    // post 'infoDelivery' messages with currentTime/duration/playerState/
+    // volume/muted/playbackQuality. YouTube sometimes ignores the very first
+    // listening hint, so callers retry a few times after iframe load.
+    function ytSubscribe(iframe) {{
+        if (!iframe || !iframe.contentWindow) return;
+        try {{
+            iframe.contentWindow.postMessage(JSON.stringify({{
+                event: 'listening',
+                id: iframe.id,
+                channel: 'playerInfo'
+            }}), '*');
+        }} catch (e) {{
+            log('ytSubscribe failed:', e);
+        }}
+    }}
+
+    // Build the controls bar inside the YouTube preview container, wire all
+    // user interactions, subscribe to player state. Stores a cleanup
+    // function on container._htControlsCleanup for hidePreview to call.
+    function attachTrailerControls(container, iframe) {{
+        // Invisible click absorber over the iframe — keeps clicks/taps from
+        // reaching YouTube's player so its native tap-feedback overlay
+        // (centre skip-back / play-pause / skip-forward icons) doesn't fire.
+        // Mouse hover still drives controls visibility.
+        const mask = document.createElement('div');
+        mask.className = 'ht-iframe-mask';
+        mask.addEventListener('click', (e) => e.stopPropagation());
+        container.appendChild(mask);
+
+        const controls = document.createElement('div');
+        controls.className = 'ht-controls';
+        // No background here — the gradient is painted on a dedicated
+        // child div (.ht-controls-bg) below. Reason: when the controls
+        // bar paints its OWN background, the bottom-left corner refuses
+        // to clip in Chromium as soon as a form element (range input)
+        // inside the bar gets hovered. Painting the bg on a sibling-less
+        // child whose only job is the gradient sidesteps the bug.
+        // innerHTML is safer than chained createElement here — strings are all
+        // static, no user content interpolated.
+        // Background div — same gradient as before, with its own clip-path
+        // that handles the bottom corners. This is what survives the
+        // Chromium hover-clip bug.
+        const controlsBg = document.createElement('div');
+        controlsBg.className = 'ht-controls-bg';
+        controlsBg.style.clipPath = 'inset(0 round 0 0 ' + PREVIEW_BORDER_RADIUS + 'px ' + PREVIEW_BORDER_RADIUS + 'px)';
+        controls.appendChild(controlsBg);
+
+        controls.innerHTML +=
+            '<button class=""ht-control-btn ht-play-pause"" type=""button"" aria-label=""Play/pause"">' + ICON_PAUSE + '</button>' +
+            '<span class=""ht-time ht-current"">0:00</span>' +
+            '<input type=""range"" class=""ht-seek"" min=""0"" max=""100"" value=""0"" step=""0.1"" aria-label=""Seek"">' +
+            '<span class=""ht-time ht-duration"">0:00</span>' +
+            '<div class=""ht-volume-wrap"">' +
+            '<button class=""ht-control-btn ht-mute"" type=""button"" aria-label=""Mute/unmute"">' + ICON_VOL_MUTE + '</button>' +
+            '<input type=""range"" class=""ht-volume"" min=""0"" max=""100"" value=""' + PREVIEW_VOLUME + '"" aria-label=""Volume"">' +
+            '</div>' +
+            '<button class=""ht-control-btn ht-fs"" type=""button"" aria-label=""Toggle fullscreen"">' + ICON_FS_ENTER + '</button>';
+        container.appendChild(controls);
+
+        const playPauseBtn = controls.querySelector('.ht-play-pause');
+        const muteBtn      = controls.querySelector('.ht-mute');
+        const fsBtn        = controls.querySelector('.ht-fs');
+        const seekEl       = controls.querySelector('.ht-seek');
+        const volEl        = controls.querySelector('.ht-volume');
+        const curEl        = controls.querySelector('.ht-current');
+        const durEl        = controls.querySelector('.ht-duration');
+
+        let isPaused = false;
+        let isMuted = true; // existing code starts muted until user activation
+        let isSeeking = false;
+        let lastUserVolumeAt = 0;
+        // Track whether the cursor is currently over any part of the preview
+        // so the auto-reveal-then-hide sequence below doesn't dismiss the
+        // bar out from under a user who's already hovering it (especially
+        // on first hover, which lands inside the 2800 ms window).
+        let mouseInPreview = false;
+
+        // Auto-show controls on hover, fade out 350ms after mouse leaves
+        let hideTimer = null;
+        function showCtrls() {{
+            if (hideTimer) {{ clearTimeout(hideTimer); hideTimer = null; }}
+            controls.classList.add('visible');
+        }}
+        function hideCtrlsLater() {{
+            if (document.fullscreenElement) return; // FS uses :hover via CSS
+            if (mouseInPreview) return;             // user is interacting — don't hide
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => controls.classList.remove('visible'), 350);
+        }}
+        function onPreviewEnter() {{ mouseInPreview = true; showCtrls(); }}
+        function onPreviewLeave() {{ mouseInPreview = false; hideCtrlsLater(); }}
+        // mouseenter/leave on the mask + controls — iframe events don't
+        // fire when the click absorber sits above it.
+        mask.addEventListener('mouseenter', onPreviewEnter);
+        mask.addEventListener('mouseleave', onPreviewLeave);
+        iframe.addEventListener('mouseenter', onPreviewEnter);
+        iframe.addEventListener('mouseleave', onPreviewLeave);
+        controls.addEventListener('mouseenter', onPreviewEnter);
+        controls.addEventListener('mouseleave', onPreviewLeave);
+        // Brief reveal when the preview first appears so users discover the
+        // bar. The auto-hide at 2800 ms only fires if the cursor isn't
+        // currently inside the preview — otherwise the user would lose the
+        // bar mid-interaction.
+        setTimeout(showCtrls, 800);
+        setTimeout(hideCtrlsLater, 2800);
+
+        playPauseBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            ytCommand(iframe, isPaused ? 'playVideo' : 'pauseVideo');
+        }});
+        muteBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            ytCommand(iframe, isMuted ? 'unMute' : 'mute');
+        }});
+        fsBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            if (document.fullscreenElement) {{
+                document.exitFullscreen();
+            }} else {{
+                // requestFullscreen on the container (not the iframe) so the
+                // controls bar stays inside the FS surface — the iframe is
+                // resized to fill via the :fullscreen CSS rule.
+                const req = container.requestFullscreen
+                    ? container.requestFullscreen.bind(container)
+                    : (container.webkitRequestFullscreen
+                        ? container.webkitRequestFullscreen.bind(container)
+                        : null);
+                if (req) req().catch(err => log('FS request failed:', err));
+            }}
+        }});
+
+        seekEl.addEventListener('pointerdown', () => {{ isSeeking = true; }});
+        seekEl.addEventListener('input', (e) => {{
+            e.stopPropagation();
+            if (isSeeking) curEl.textContent = fmtTime(parseFloat(seekEl.value));
+        }});
+        seekEl.addEventListener('change', (e) => {{
+            e.stopPropagation();
+            const t = parseFloat(seekEl.value);
+            ytCommand(iframe, 'seekTo', [t, true]);
+            // Brief delay so the next infoDelivery doesn't snap the slider back
+            setTimeout(() => {{ isSeeking = false; }}, 100);
+        }});
+        seekEl.addEventListener('click', (e) => e.stopPropagation());
+
+        volEl.addEventListener('input', (e) => {{
+            e.stopPropagation();
+            const v = parseInt(volEl.value, 10);
+            lastUserVolumeAt = Date.now();
+            if (v > 0 && isMuted) ytCommand(iframe, 'unMute');
+            ytCommand(iframe, 'setVolume', [v]);
+        }});
+        volEl.addEventListener('click', (e) => e.stopPropagation());
+
+        // Receive player info: state, time, volume, muted
+        const onMessage = (e) => {{
+            if (!e.origin || e.origin.indexOf('youtube') === -1) return;
+            if (e.source !== iframe.contentWindow) return;
+            let data;
+            try {{ data = JSON.parse(e.data); }} catch (_) {{ return; }}
+            if (data.event !== 'infoDelivery' || !data.info) return;
+            const info = data.info;
+            if (info.playerState !== undefined) {{
+                const playing = (info.playerState === 1);
+                isPaused = !playing;
+                playPauseBtn.innerHTML = isPaused ? ICON_PLAY : ICON_PAUSE;
+            }}
+            if (info.duration !== undefined && info.duration > 0) {{
+                if (parseFloat(seekEl.max) !== info.duration) seekEl.max = info.duration;
+                durEl.textContent = fmtTime(info.duration);
+            }}
+            if (info.currentTime !== undefined && !isSeeking) {{
+                seekEl.value = info.currentTime;
+                curEl.textContent = fmtTime(info.currentTime);
+            }}
+            if (info.muted !== undefined) {{
+                isMuted = !!info.muted;
+                muteBtn.innerHTML = isMuted ? ICON_VOL_MUTE : ICON_VOL;
+            }}
+            if (info.volume !== undefined && Date.now() - lastUserVolumeAt > 500) {{
+                if (parseInt(volEl.value, 10) !== info.volume) volEl.value = info.volume;
+            }}
+        }};
+        window.addEventListener('message', onMessage);
+
+        // Track fullscreen state — toggle FS icon, suppress one Escape after
+        // exit so the persistent dismisser doesn't tear down the preview on
+        // the same Escape press, and set recentFsExit to keep the resize
+        // event that fires next from doing the same.
+        const onFsChange = () => {{
+            const isFs = !!document.fullscreenElement;
+            fsBtn.innerHTML = isFs ? ICON_FS_EXIT : ICON_FS_ENTER;
+            if (!isFs) {{
+                suppressEscapeOnce = true;
+                setTimeout(() => {{ suppressEscapeOnce = false; }}, 250);
+                recentFsExit = true;
+                setTimeout(() => {{ recentFsExit = false; }}, 600);
+            }}
+        }};
+        document.addEventListener('fullscreenchange', onFsChange);
+
+        // Subscribe to playerInfo channel after iframe loads. YouTube
+        // sometimes drops the first listening hint — retry over the next
+        // few seconds to be safe.
+        const trySub = () => ytSubscribe(iframe);
+        iframe.addEventListener('load', () => {{
+            trySub();
+            setTimeout(trySub, 500);
+            setTimeout(trySub, 1500);
+            setTimeout(trySub, 3500);
+        }});
+
+        // Cleanup hook called by hidePreview
+        container._htControlsCleanup = () => {{
+            window.removeEventListener('message', onMessage);
+            document.removeEventListener('fullscreenchange', onFsChange);
+            if (hideTimer) {{ clearTimeout(hideTimer); hideTimer = null; }}
+            if (document.fullscreenElement === container) {{
+                document.exitFullscreen().catch(() => {{}});
+            }}
+        }};
+    }}
+
     // AnchorToCard positioning: re-read the card's bounding rect every frame
     // and update the preview's translate3d so it tracks the card during scroll.
     // The loop self-terminates when the preview is torn down or the card
@@ -1161,7 +1697,11 @@ public class HoverTrailerController : ControllerBase
                 : {{ x: rawX, y: rawY }};
             const anchorX = pinned.x;
             const anchorY = pinned.y;
-            container.style.transform = `translate3d(${{anchorX}}px, ${{anchorY}}px, 0)`;
+            // Position via top/left (not transform) — see containerStyles
+            // comment in createYouTubePreview: any transform on the
+            // container breaks the bottom-left corner clip in Chromium.
+            container.style.left = `${{anchorX}}px`;
+            container.style.top = `${{anchorY}}px`;
             // Layout shifts (card images loading, scrollbar appearing) reposition
             // the preview off-scroll. The halo's scroll-only listener won't catch
             // these, so drive halo updates from the same frame the preview moves.
@@ -1195,8 +1735,21 @@ public class HoverTrailerController : ControllerBase
     // isPlaying + hidePreview in the card click listener).
     function attachPersistentDismissers() {{
         detachPersistentDismissers();
-        const onClick = () => {{ hidePreview(); }};
-        const onKey = (e) => {{ if (e.key === 'Escape') hidePreview(); }};
+        const onClick = (e) => {{
+            // Clicks on the preview itself (controls bar, container) must
+            // not dismiss — only outside-clicks tear it down.
+            if (currentPreview && currentPreview.contains(e.target)) return;
+            hidePreview();
+        }};
+        const onKey = (e) => {{
+            if (e.key !== 'Escape') return;
+            // Browser handles Escape to exit fullscreen; don't double-fire.
+            if (document.fullscreenElement) return;
+            // Recently exited FS via Escape → swallow this one keypress
+            // (set by the trailer-controls fullscreenchange listener).
+            if (suppressEscapeOnce) {{ suppressEscapeOnce = false; return; }}
+            hidePreview();
+        }};
         document.addEventListener('click', onClick, true);
         document.addEventListener('keydown', onKey, true);
         persistentDismissHandlers = {{ click: onClick, keydown: onKey }};
@@ -1287,16 +1840,24 @@ public class HoverTrailerController : ControllerBase
                         const vqParam = REMOTE_VIDEO_QUALITY !== 'adaptive'
                             ? `&vq=${{REMOTE_VIDEO_QUALITY}}`
                             : '';
+                        // No &loop=1&playlist=... — that combo triggers
+                        // YouTube's playlist navigation UI (prev/pause/next
+                        // icons in the centre of the video) every time the
+                        // single-video playlist boundary is hit. Loop is
+                        // handled manually in attachYouTubeLoopHandler:
+                        // when playerState === 0 (ENDED) we seekTo(0) +
+                        // playVideo, which avoids the playlist UI entirely.
                         videoSource = `https://www.youtube-nocookie.com/embed/${{videoId}}?` +
                             `autoplay=1` +
                             `&mute=1` +                  // Always start muted to prevent loud audio spike
                             `&controls=0` +
-                            `&loop=1` +
-                            `&playlist=${{videoId}}` +  // Required for loop to work
                             `&playsinline=1` +           // Mobile compatibility
                             `&rel=0` +                   // No related videos
                             `&modestbranding=1` +        // Minimal branding
                             `&enablejsapi=1` +           // Enable JS API for volume and quality control
+                            `&disablekb=1` +             // Suppress YouTube keyboard shortcut UI feedback
+                            `&iv_load_policy=3` +        // No annotations / info cards
+                            `&fs=0` +                    // No native fullscreen button (we provide our own)
                             vqParam;
                         log('Converted to YouTube nocookie embed URL:', videoSource);
                         log('Using youtube-nocookie.com to prevent Error 153');
@@ -1439,7 +2000,13 @@ public class HoverTrailerController : ControllerBase
                 // in AnchorToCard + Halo modes fights the rAF tracker and leaves
                 // the halo mask stranded at old coords; a clean tear-down is what
                 // the user asked for. The listener is removed in hidePreview.
-                resizeHandler = () => {{ hidePreview(); }};
+                // Skip during fullscreen entry/exit — those fire resize but the
+                // preview should obviously stay (issue #18).
+                resizeHandler = () => {{
+                    if (document.fullscreenElement) return;
+                    if (recentFsExit) return; // exit-FS resize cleanup, not a real viewport change
+                    hidePreview();
+                }};
                 window.addEventListener('resize', resizeHandler);
 
                 log('Preview created for:', trailerInfo.Name);
@@ -1489,6 +2056,16 @@ public class HoverTrailerController : ControllerBase
             const previewToRemove = currentPreview;
             const videoToStop = previewToRemove.querySelector('video');
             const iframeToStop = previewToRemove.querySelector('iframe');
+
+            // Tear down trailer controls listeners (postMessage, fullscreenchange)
+            // and the always-on YouTube loop listener before removing the iframe
+            // so we don't keep stale window listeners.
+            if (typeof previewToRemove._htControlsCleanup === 'function') {{
+                try {{ previewToRemove._htControlsCleanup(); }} catch (e) {{ log('controls cleanup error:', e); }}
+            }}
+            if (typeof previewToRemove._htLoopCleanup === 'function') {{
+                try {{ previewToRemove._htLoopCleanup(); }} catch (e) {{ log('loop cleanup error:', e); }}
+            }}
 
             // Stop video or iframe immediately
             if (videoToStop) {{
