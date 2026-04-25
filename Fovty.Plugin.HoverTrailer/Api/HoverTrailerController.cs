@@ -933,17 +933,17 @@ public class HoverTrailerController : ControllerBase
 
         container.style.cssText = containerStyles;
 
-        // Configure iframe for YouTube with proper attributes to prevent Error 153
-        // Use object-fit: cover to maintain aspect ratio while filling the container
+        // Configure iframe for YouTube with proper attributes to prevent Error 153.
+        // Plain top:0/left:0 — earlier double-centering (top:50% + translate(-50%,-50%))
+        // produced sub-pixel rounding on odd container sizes and exposed the
+        // container's #000 background as a 1px sliver on the top + left edges.
         iframe.style.cssText = `
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             border: none;
-            object-fit: cover;
         `;
         // Set permission and security attributes BEFORE src so the initial
         // navigation commits with the Permissions Policy in effect (issue #16:
