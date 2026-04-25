@@ -453,6 +453,23 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_PREVIEW_AUDIO = {config.EnablePreviewAudio.ToString().ToLower()};
     const PREVIEW_VOLUME = {config.PreviewVolume};
     const REMOTE_VIDEO_QUALITY = '{config.RemoteVideoQuality}';
+    // Native iframe render dimensions tied to the requested quality. YouTube's
+    // adaptive selector reads the iframe's pixel dimensions: ≥1280px wide →
+    // 720p, ≥1920px → 1080p. We render at the target tier and let CSS
+    // transform: scale(...) fit the container, so even tiny poster cards get
+    // an HD source stream instead of YouTube serving 240/360p to undersized
+    // iframes (the prior behaviour). Container CSS dimensions still match
+    // FitContent / Manual sizing exactly — only the iframe element's intrinsic
+    // pixel buffer changes.
+    const NATIVE_IFRAME_DIMS = (() => {{
+        switch (REMOTE_VIDEO_QUALITY) {{
+            case 'hd2160': return {{ w: 3840, h: 2160 }};
+            case 'hd1080': return {{ w: 1920, h: 1080 }};
+            case 'hd720':  return {{ w: 1280, h: 720 }};
+            case 'hd480':  return {{ w: 854,  h: 480 }};
+            default:       return {{ w: 1920, h: 1080 }}; // 'adaptive'
+        }}
+    }})();
     const BACKGROUND_BLUR_MODE = '{config.GetEffectiveBackgroundBlurMode()}';
     const BACKGROUND_BLUR_FALLOFF_RADIUS = {config.BackgroundBlurFalloffRadius};
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
@@ -934,17 +951,26 @@ public class HoverTrailerController : ControllerBase
         container.style.cssText = containerStyles;
 
         // Configure iframe for YouTube with proper attributes to prevent Error 153.
-        // Plain top:0/left:0 — earlier double-centering (top:50% + translate(-50%,-50%))
-        // produced sub-pixel rounding on odd container sizes and exposed the
-        // container's #000 background as a 1px sliver on the top + left edges.
+        // The iframe element itself is rendered at NATIVE_IFRAME_DIMS (e.g.
+        // 1920×1080 for 'adaptive' / hd1080) and CSS-scaled down to fit the
+        // container. This forces YouTube's adaptive bitrate selector to serve
+        // HD because it reads the iframe's pixel dimensions. transform-origin
+        // 0 0 keeps the scaled box anchored at top-left so it covers the
+        // container exactly with no sub-pixel sliver (Bug 2 fix preserved).
+        const scaleX = containerWidth / NATIVE_IFRAME_DIMS.w;
+        const scaleY = containerHeight / NATIVE_IFRAME_DIMS.h;
         iframe.style.cssText = `
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: ${{NATIVE_IFRAME_DIMS.w}}px;
+            height: ${{NATIVE_IFRAME_DIMS.h}}px;
             border: none;
+            transform: scale(${{scaleX}}, ${{scaleY}});
+            transform-origin: 0 0;
         `;
+        iframe.width = NATIVE_IFRAME_DIMS.w;
+        iframe.height = NATIVE_IFRAME_DIMS.h;
         // Set permission and security attributes BEFORE src so the initial
         // navigation commits with the Permissions Policy in effect (issue #16:
         // setting src first caused the first-hover autoplay on a fresh page
@@ -1253,6 +1279,14 @@ public class HoverTrailerController : ControllerBase
                         // Enable JS API for volume control and quality setting
                         // ALWAYS start muted to prevent loud initial audio, then unmute via API
 
+                        // Append &vq=... when the user pinned a specific tier.
+                        // YouTube treats vq as a hint, not a contract, but combined
+                        // with the NATIVE_IFRAME_DIMS sizing it nudges the player
+                        // toward the requested quality. 'adaptive' is the default
+                        // and lets YouTube fully decide based on bandwidth.
+                        const vqParam = REMOTE_VIDEO_QUALITY !== 'adaptive'
+                            ? `&vq=${{REMOTE_VIDEO_QUALITY}}`
+                            : '';
                         videoSource = `https://www.youtube-nocookie.com/embed/${{videoId}}?` +
                             `autoplay=1` +
                             `&mute=1` +                  // Always start muted to prevent loud audio spike
@@ -1262,7 +1296,8 @@ public class HoverTrailerController : ControllerBase
                             `&playsinline=1` +           // Mobile compatibility
                             `&rel=0` +                   // No related videos
                             `&modestbranding=1` +        // Minimal branding
-                            `&enablejsapi=1`;            // Enable JS API for volume and quality control
+                            `&enablejsapi=1` +           // Enable JS API for volume and quality control
+                            vqParam;
                         log('Converted to YouTube nocookie embed URL:', videoSource);
                         log('Using youtube-nocookie.com to prevent Error 153');
                         log('YouTube quality: ' + REMOTE_VIDEO_QUALITY + ', Volume: ' + PREVIEW_VOLUME + '%');
