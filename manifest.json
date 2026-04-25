@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.9.0",
+        "changelog": "- feat(controls): trailer controls overlay with HD-aware rounded clipping (#18)\n- fix(youtube): serve HD by rendering iframe at native quality dims\n- fix(iframe): drop double-centering that bled #000 on top+left edges",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.9.0/HoverTrailer-0.2.9.0-server.zip",
+        "checksum": "520acdafe619d5d99f2bc3e192b28c91",
+        "timestamp": "2026-04-25T19:07:20Z"
+      },
+      {
         "version": "0.2.8.1",
         "changelog": "- chore(config): update default settings for new installs\n- chore(config): remove dead orphan field, methods, and ghost sizing mode",
         "targetAbi": "10.11.0.0",
