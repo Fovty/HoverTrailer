@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.2.9.1",
+        "changelog": "- feat(loop): opt-in stop-on-end so trailers don't loop forever",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.2.9.1/HoverTrailer-0.2.9.1-server.zip",
+        "checksum": "3d1013e80d544e502cc9a21a812f2467",
+        "timestamp": "2026-04-26T19:52:43Z"
+      },
+      {
         "version": "0.2.9.0",
         "changelog": "- feat(controls): trailer controls overlay with HD-aware rounded clipping (#18)\n- fix(youtube): serve HD by rendering iframe at native quality dims\n- fix(iframe): drop double-centering that bled #000 on top+left edges",
         "targetAbi": "10.11.0.0",
