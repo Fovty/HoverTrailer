@@ -201,6 +201,14 @@
 
                             <div class="checkboxContainer">
                                 <label class="emby-checkbox-label">
+                                    <input id="EnableTrailerLoop" name="EnableTrailerLoop" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Loop trailer when it ends</span>
+                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
+                                <div class="fieldDescription">When enabled (default), the trailer restarts from the beginning once it finishes. When disabled, the preview is dismissed automatically as soon as the trailer ends.</div>
+                            </div>
+
+                            <div class="checkboxContainer">
+                                <label class="emby-checkbox-label">
                                     <input id="EnableFocusTrigger" name="EnableFocusTrigger" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Trigger preview on keyboard / D-pad focus</span>
                                 <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
@@ -361,6 +369,7 @@
                     document.querySelector('#EnableFocusTrigger').checked = config.EnableFocusTrigger || false;
                     document.querySelector('#EnableAnchorPinToViewport').checked = config.EnableAnchorPinToViewport || false;
                     document.querySelector('#EnableTrailerControls').checked = config.EnableTrailerControls !== false;
+                    document.querySelector('#EnableTrailerLoop').checked = config.EnableTrailerLoop !== false;
 
                     // Update positioning, sizing, and blur mode visibility
                     updatePositioningModeVisibility();
@@ -412,6 +421,7 @@
                     config.EnableFocusTrigger = document.querySelector('#EnableFocusTrigger').checked;
                     config.EnableAnchorPinToViewport = document.querySelector('#EnableAnchorPinToViewport').checked;
                     config.EnableTrailerControls = document.querySelector('#EnableTrailerControls').checked;
+                    config.EnableTrailerLoop = document.querySelector('#EnableTrailerLoop').checked;
 
                     // Trailer Fallback Settings
                     config.EnableThemeVideoFallback = document.querySelector('#EnableThemeVideoFallback').checked;

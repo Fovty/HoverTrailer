@@ -84,6 +84,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool EnableTrailerControls { get; set; } = true;
 
     /// <summary>
+    /// When true (default), trailers restart from the beginning once they
+    /// finish playing. When false, the preview is dismissed automatically
+    /// when the trailer ends, so it doesn't loop indefinitely. Applies to
+    /// both YouTube previews and local theme-video fallbacks.
+    /// </summary>
+    public bool EnableTrailerLoop { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the preview width in pixels (Manual mode).
     /// </summary>
     public int PreviewWidth { get; set; } = 300;

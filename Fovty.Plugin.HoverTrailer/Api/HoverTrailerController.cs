@@ -482,6 +482,7 @@ public class HoverTrailerController : ControllerBase
     // can reach the controls). Compute the effective bool server-side so the
     // JS doesn't have to re-check.
     const ENABLE_TRAILER_CONTROLS = {(config.EnablePersistentPreview && config.EnableTrailerControls).ToString().ToLower()};
+    const ENABLE_TRAILER_LOOP = {config.EnableTrailerLoop.ToString().ToLower()};
 
     // Disable on touch devices: hover UX doesn't apply and mobile WebViews
     // exhibit freezes around iframe cleanup (issue #15).
@@ -1385,8 +1386,14 @@ public class HoverTrailerController : ControllerBase
 
         video.src = trailerPath;
         video.muted = !ENABLE_PREVIEW_AUDIO;
-        video.loop = true;
+        video.loop = ENABLE_TRAILER_LOOP;
         video.preload = 'metadata';
+        if (!ENABLE_TRAILER_LOOP) {{
+            // Mirror the YouTube end-of-trailer behaviour: dismiss the
+            // preview when the video finishes instead of leaving a frozen
+            // last frame on screen (#19).
+            video.addEventListener('ended', () => hidePreview());
+        }}
 
         // Set volume based on configuration (0-100 range converted to 0.0-1.0)
         if (ENABLE_PREVIEW_AUDIO) {{
@@ -1433,12 +1440,13 @@ public class HoverTrailerController : ControllerBase
         }}
     }}
 
-    // Manual single-video loop handler. Runs unconditionally for all
-    // YouTube previews (controls or not). Subscribes to playerInfo and
-    // restarts the video when it ends (playerState === 0). Replaces the
-    // legacy &loop=1&playlist=... URL params that triggered YouTube's
-    // playlist navigation UI (prev/pause/next icons in the centre).
-    // Returns a cleanup function for hidePreview.
+    // YouTube ENDED handler. Subscribes to playerInfo and reacts when the
+    // video reaches its end (playerState === 0). With ENABLE_TRAILER_LOOP
+    // (default), the video restarts in place — replaces the legacy
+    // &loop=1&playlist=... URL params that triggered YouTube's playlist
+    // navigation UI (prev/pause/next icons in the centre). With looping
+    // disabled (#19), the preview is dismissed instead so trailers don't
+    // play forever. Returns a cleanup function for hidePreview.
     function attachYouTubeLoopHandler(iframe) {{
         const onMessage = (e) => {{
             if (!e.origin || e.origin.indexOf('youtube') === -1) return;
@@ -1447,8 +1455,12 @@ public class HoverTrailerController : ControllerBase
             try {{ data = JSON.parse(e.data); }} catch (_) {{ return; }}
             if (data.event !== 'infoDelivery' || !data.info) return;
             if (data.info.playerState === 0) {{
-                ytCommand(iframe, 'seekTo', [0, true]);
-                ytCommand(iframe, 'playVideo');
+                if (ENABLE_TRAILER_LOOP) {{
+                    ytCommand(iframe, 'seekTo', [0, true]);
+                    ytCommand(iframe, 'playVideo');
+                }} else {{
+                    hidePreview();
+                }}
             }}
         }};
         window.addEventListener('message', onMessage);
