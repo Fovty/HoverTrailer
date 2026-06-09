@@ -44,8 +44,23 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets the preview positioning mode (Center, Custom, or AnchorToCard).
+    /// "Center" is surfaced in the UI as "Fix Position" — see <see cref="PreviewFixedPosition"/>.
     /// </summary>
     public string PreviewPositioningMode { get; set; } = "AnchorToCard";
+
+    /// <summary>
+    /// Fix Position mode only (<see cref="PreviewPositioningMode"/> == "Center"):
+    /// which fixed, percentage-based anchor to use. One of "Center", "TopLeft",
+    /// "TopRight", "BottomLeft", "BottomRight". Percentages keep the placement
+    /// resolution-independent (issue #20).
+    /// </summary>
+    public string PreviewFixedPosition { get; set; } = "Center";
+
+    /// <summary>
+    /// Fix Position mode only: edge gap for the four corner anchors, as a
+    /// percentage of the viewport (ignored for the centered anchor).
+    /// </summary>
+    public int PreviewFixedMarginPercent { get; set; } = 3;
 
     /// <summary>
     /// Gets or sets whether the preview should keep playing after the cursor
@@ -255,6 +270,18 @@ public class PluginConfiguration : BasePluginConfiguration
             !string.Equals(PreviewPositioningMode, "AnchorToCard", StringComparison.OrdinalIgnoreCase))
         {
             yield return "Preview Positioning Mode must be 'Center', 'Custom', or 'AnchorToCard'";
+        }
+
+        // Fixed position validation (Fix Position mode)
+        var validFixedPositions = new[] { "Center", "TopLeft", "TopRight", "BottomLeft", "BottomRight" };
+        if (!validFixedPositions.Any(p => string.Equals(p, PreviewFixedPosition, StringComparison.OrdinalIgnoreCase)))
+        {
+            yield return "Preview Fixed Position must be one of: Center, TopLeft, TopRight, BottomLeft, BottomRight";
+        }
+
+        if (PreviewFixedMarginPercent < 0 || PreviewFixedMarginPercent > 45)
+        {
+            yield return "Preview Fixed Margin Percent must be between 0 and 45";
         }
 
         // Background blur mode validation. Empty is allowed for migration —

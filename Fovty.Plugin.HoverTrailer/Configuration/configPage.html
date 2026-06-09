@@ -154,11 +154,29 @@
                             <div class="selectContainer">
                                 <label class="selectLabel" for="PreviewPositioningMode">Positioning Mode</label>
                                 <select id="PreviewPositioningMode" name="PreviewPositioningMode" is="emby-select" class="emby-select-withcolor emby-select">
-                                    <option value="Center">Center (Automatically Centered)</option>
+                                    <option value="Center">Fix Position (centered or pinned to a corner)</option>
                                     <option value="Custom">Custom (Manual Positioning)</option>
                                     <option value="AnchorToCard">Anchor to Card (Tethered, scrolls with poster)</option>
                                 </select>
                                 <div class="fieldDescription">Choose how to position the preview window</div>
+                            </div>
+
+                            <div class="selectContainer" id="fixPositionContainer">
+                                <label class="selectLabel" for="PreviewFixedPosition">Fixed Position</label>
+                                <select id="PreviewFixedPosition" name="PreviewFixedPosition" is="emby-select" class="emby-select-withcolor emby-select">
+                                    <option value="Center">Center</option>
+                                    <option value="TopLeft">Top Left</option>
+                                    <option value="TopRight">Top Right</option>
+                                    <option value="BottomLeft">Bottom Left</option>
+                                    <option value="BottomRight">Bottom Right</option>
+                                </select>
+                                <div class="fieldDescription">Fix Position mode: where the preview sits on screen. Positions are percentage-based for resolution independence. You can also drag the preview to move or resize it while it plays — that adjustment is remembered on this device.</div>
+                            </div>
+
+                            <div class="inputContainer" id="fixMarginContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="PreviewFixedMarginPercent">Corner Margin (%)</label>
+                                <input id="PreviewFixedMarginPercent" name="PreviewFixedMarginPercent" type="number" min="0" max="45" is="emby-input" />
+                                <div class="fieldDescription">Gap from the screen edge for the four corner positions (0-45%). Ignored for Center.</div>
                             </div>
 
                             <div id="customPositionContainer">
@@ -196,7 +214,7 @@
                                     <input id="EnableTrailerControls" name="EnableTrailerControls" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Show trailer controls (play/pause, seek, volume, fullscreen)</span>
                                 <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
-                                <div class="fieldDescription">Overlay an interactive control bar on YouTube previews. Requires the persistent option above — without it the preview is dismissed when the cursor leaves the card before you can reach the controls.</div>
+                                <div class="fieldDescription">Overlay an interactive control bar on trailer previews (YouTube and local). Requires the persistent option above — without it the preview is dismissed when the cursor leaves the card before you can reach the controls.</div>
                             </div>
 
                             <div class="checkboxContainer">
@@ -347,6 +365,8 @@
 
                     // Hover Preview Customization
                     document.querySelector('#PreviewPositioningMode').value = config.PreviewPositioningMode || 'Center';
+                    document.querySelector('#PreviewFixedPosition').value = config.PreviewFixedPosition || 'Center';
+                    document.querySelector('#PreviewFixedMarginPercent').value = (config.PreviewFixedMarginPercent != null ? config.PreviewFixedMarginPercent : 3);
                     document.querySelector('#PreviewOffsetX').value = config.PreviewOffsetX || 0;
                     document.querySelector('#PreviewOffsetY').value = config.PreviewOffsetY || 0;
                     document.querySelector('#PreviewSizingMode').value = config.PreviewSizingMode || 'Manual';
@@ -401,6 +421,9 @@
 
                     // Hover Preview Customization
                     config.PreviewPositioningMode = document.querySelector('#PreviewPositioningMode').value || 'Center';
+                    config.PreviewFixedPosition = document.querySelector('#PreviewFixedPosition').value || 'Center';
+                    config.PreviewFixedMarginPercent = parseInt(document.querySelector('#PreviewFixedMarginPercent').value);
+                    if (isNaN(config.PreviewFixedMarginPercent)) config.PreviewFixedMarginPercent = 3;
                     config.PreviewOffsetX = parseInt(document.querySelector('#PreviewOffsetX').value) || 0;
                     config.PreviewOffsetY = parseInt(document.querySelector('#PreviewOffsetY').value) || 0;
                     config.PreviewSizingMode = document.querySelector('#PreviewSizingMode').value || 'Manual';
@@ -469,6 +492,10 @@
                 customPositionContainer.style.display = showOffsets ? 'block' : 'none';
                 // Pin to Viewport is meaningful only for AnchorToCard.
                 document.querySelector('#anchorPinContainer').style.display = positioningMode === 'AnchorToCard' ? 'block' : 'none';
+                // Fixed position + corner margin apply only in Fix Position mode ('Center').
+                const isFixed = positioningMode === 'Center';
+                document.querySelector('#fixPositionContainer').style.display = isFixed ? 'block' : 'none';
+                document.querySelector('#fixMarginContainer').style.display = isFixed ? 'block' : 'none';
             }
 
             function updateBlurModeVisibility() {

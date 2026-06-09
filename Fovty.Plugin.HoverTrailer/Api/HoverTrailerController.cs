@@ -442,6 +442,8 @@ public class HoverTrailerController : ControllerBase
     const HOVER_DELAY = {config.HoverDelayMs};
     const DEBUG_LOGGING = {config.EnableDebugLogging.ToString().ToLower()};
     const PREVIEW_POSITIONING_MODE = '{config.PreviewPositioningMode}';
+    const PREVIEW_FIXED_POSITION = '{config.PreviewFixedPosition}';
+    const PREVIEW_FIXED_MARGIN_PCT = {config.PreviewFixedMarginPercent};
     const PREVIEW_OFFSET_X = {config.PreviewOffsetX};
     const PREVIEW_OFFSET_Y = {config.PreviewOffsetY};
     const PREVIEW_WIDTH = {config.PreviewWidth};
@@ -536,12 +538,133 @@ public class HoverTrailerController : ControllerBase
             y: Math.min(maxY, Math.max(ANCHOR_VIEWPORT_MARGIN, anchorY)),
         }};
     }}
+
+    // ── Fix Position Mode geometry (issue #20) ────────────────────────
+    // Shared container chrome (everything except the position properties) so
+    // the positioning branches can't drift. Used by the Fix Position branch
+    // in both createYouTubePreview and createVideoPreview.
+    function htContainerChrome(w, h) {{
+        return `
+            width: ${{w}}px;
+            height: ${{h}}px;
+            border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
+            /* Compositor-level clip — overflow:hidden + border-radius isn't
+               enough when an iframe child has transform: scale(); clip-path
+               forces strict raster clipping so the corners stay round. */
+            clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+    }}
+    // Percentage-anchored fixed position: centre or one of four corners.
+    // Percentages keep it resolution-independent. Corners pin to an edge with
+    // a percentage margin and use NO transform, so the bottom-left rounded
+    // corner still clips in Chromium (same reason AnchorToCard avoids it).
+    function htFixedPositionCss() {{
+        const m = PREVIEW_FIXED_MARGIN_PCT;
+        switch (PREVIEW_FIXED_POSITION) {{
+            case 'TopLeft':     return `top: ${{m}}%; left: ${{m}}%;`;
+            case 'TopRight':    return `top: ${{m}}%; right: ${{m}}%;`;
+            case 'BottomLeft':  return `bottom: ${{m}}%; left: ${{m}}%;`;
+            case 'BottomRight': return `bottom: ${{m}}%; right: ${{m}}%;`;
+            case 'Center':
+            default:            return `top: 50%; left: 50%; transform: translate(-50%, -50%);`;
+        }}
+    }}
+    // Saved drag-resize size (#20), as viewport fractions, clamped sane.
+    function htHasSavedSize() {{
+        const p = htReadPrefs();
+        return typeof p.wPct === 'number' && typeof p.aspect === 'number' && p.aspect > 0;
+    }}
+    // Restore a saved drag-resize. Stored as width fraction + aspect (NOT a
+    // height fraction) so replaying on a different-aspect viewport preserves
+    // the locked aspect ratio instead of stretching. Clamped uniformly so it
+    // never exceeds 95% of either axis or drops below a sane minimum width.
+    function htFixedSize(baseW, baseH) {{
+        const p = htReadPrefs();
+        if (typeof p.wPct === 'number' && typeof p.aspect === 'number' && p.aspect > 0) {{
+            const minW = 160;
+            let w = p.wPct * window.innerWidth;
+            let h = w / p.aspect;
+            const s = Math.min(1, (window.innerWidth * 0.95) / w, (window.innerHeight * 0.95) / h);
+            w *= s; h *= s;
+            if (w < minW) {{ w = minW; h = w / p.aspect; }}
+            return {{ w: Math.round(w), h: Math.round(h) }};
+        }}
+        return {{ w: baseW, h: baseH }};
+    }}
+    // Fix Position placement: a saved drag position (#20) wins over the preset
+    // anchor, clamped to the viewport so a stale position can't strand the
+    // preview off-screen on a smaller window.
+    function htFixedPlacementCss(w, h) {{
+        const p = htReadPrefs();
+        if (typeof p.posXPct === 'number' && typeof p.posYPct === 'number') {{
+            const c = clampAnchorToViewport(
+                Math.round(p.posXPct * window.innerWidth),
+                Math.round(p.posYPct * window.innerHeight),
+                w, h);
+            return `top: ${{c.y}}px; left: ${{c.x}}px;`;
+        }}
+        return htFixedPositionCss();
+    }}
+    function htClearPlacement() {{
+        const p = htReadPrefs();
+        delete p.posXPct; delete p.posYPct; delete p.wPct; delete p.hPct; delete p.aspect;
+        try {{ localStorage.setItem(HT_PREFS_KEY, JSON.stringify(p)); }} catch (e) {{}}
+    }}
+
     let attachedCards = new WeakSet(); // Track actual card elements that already have listeners
     let mutationDebounce = null;
     let currentToast = null;
     let toastTimeout = null;
     let previewGeneration = 0;
     let currentAbortController = null;
+    let htInteracting = false; // true during a Fix Position drag-move/resize (#20)
+
+    // ── Per-device preference store (issue #20) ───────────────────────
+    // Remembering a user's manual adjustment (volume/mute/size/position) is
+    // per-device state, so it lives in localStorage — NOT the global, admin-only plugin
+    // config. A normal viewer can't write plugin config (it's admin-gated),
+    // and writing it would clobber the shared default for everyone. The
+    // injected C# config values stay the first-run seed; once the user
+    // adjusts something it overrides the seed on this device only. Every
+    // access is try/catch-guarded so disabled or full storage (private mode,
+    // quota) degrades to in-session-only and never breaks the preview.
+    const HT_PREFS_KEY = 'hovertrailer.prefs.v1';
+    function htReadPrefs() {{
+        try {{
+            const raw = localStorage.getItem(HT_PREFS_KEY);
+            if (!raw) return {{}};
+            const obj = JSON.parse(raw);
+            return (obj && typeof obj === 'object') ? obj : {{}};
+        }} catch (e) {{
+            return {{}};
+        }}
+    }}
+    function htWritePrefs(patch) {{
+        try {{
+            const merged = Object.assign(htReadPrefs(), patch);
+            localStorage.setItem(HT_PREFS_KEY, JSON.stringify(merged));
+        }} catch (e) {{
+            /* storage unavailable — adjustments stay in-session only */
+        }}
+    }}
+    // Saved volume (0-100) layered over the PREVIEW_VOLUME seed, validated.
+    function htEffectiveVolume() {{
+        const p = htReadPrefs();
+        const n = (typeof p.volume === 'number') ? p.volume : parseInt(p.volume, 10);
+        return (Number.isFinite(n) && n >= 0 && n <= 100) ? n : PREVIEW_VOLUME;
+    }}
+    // Saved mute flag; defaults to muted only when audio is disabled.
+    function htEffectiveMuted() {{
+        const p = htReadPrefs();
+        return (typeof p.muted === 'boolean') ? p.muted : !ENABLE_PREVIEW_AUDIO;
+    }}
 
     function log(message, ...args) {{
         if (DEBUG_LOGGING) {{
@@ -771,6 +894,31 @@ public class HoverTrailerController : ControllerBase
         :fullscreen .ht-controls {{ opacity: 0; }}
         :fullscreen:hover .ht-controls,
         :fullscreen .ht-controls:hover {{ opacity: 1; }}
+        /* Local <video> in fullscreen: letterbox to show the whole frame
+           instead of cropping (it's object-fit:cover in the small preview). */
+        :fullscreen .ht-local-video {{ object-fit: contain; }}
+        /* Fix Position drag-to-move / drag-to-resize grips (#20). */
+        .ht-move-grip, .ht-resize-grip {{
+            position: absolute;
+            z-index: 3; /* above the iframe mask (1) and controls bar (2) */
+            pointer-events: auto;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.45);
+            color: #fff;
+            opacity: 0.35;
+            transition: opacity 0.15s ease, background 0.15s ease;
+        }}
+        .ht-move-grip {{ top: 6px; left: 6px; cursor: grab; }}
+        .ht-move-grip.ht-grabbing {{ cursor: grabbing; }}
+        .ht-resize-grip {{ top: 6px; right: 6px; width: 22px; height: 22px; cursor: nesw-resize; }}
+        .ht-move-grip:hover, .ht-resize-grip:hover {{ opacity: 1; background: rgba(0, 0, 0, 0.75); }}
+        .ht-move-grip svg, .ht-resize-grip svg {{ width: 16px; height: 16px; display: block; }}
+        :fullscreen .ht-move-grip, :fullscreen .ht-resize-grip {{ display: none; }}
     `;
     document.head.appendChild(trailerControlsStyles);
 
@@ -1067,31 +1215,19 @@ public class HoverTrailerController : ControllerBase
             containerHeight = PREVIEW_HEIGHT;
         }}
 
+        // Fix Position mode: a remembered drag-resize (#20) overrides the
+        // computed size. Must run before the iframe scale calc below.
+        if (PREVIEW_POSITIONING_MODE === 'Center') {{
+            const sz = htFixedSize(containerWidth, containerHeight);
+            containerWidth = sz.w; containerHeight = sz.h;
+        }}
+
         // Calculate positioning based on positioning mode
         let containerStyles;
         if (PREVIEW_POSITIONING_MODE === 'Center') {{
-            containerStyles = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: ${{containerWidth}}px;
-                height: ${{containerHeight}}px;
-                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
-                /* Compositor-level clip — overflow:hidden + border-radius
-                   isn't enough when the iframe child has transform: scale(),
-                   which puts it on its own GPU layer that escapes the
-                   parent's rounded clip in Chromium. clip-path forces strict
-                   raster clipping so the corners stay round. */
-                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
-                overflow: hidden;
-                background: #000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                z-index: 10000;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            `;
+            // Fix Position Mode (#20): percentage-anchored preset, or a
+            // remembered drag position; either clamped to the viewport.
+            containerStyles = `position: fixed; ${{htFixedPlacementCss(containerWidth, containerHeight)}}${{htContainerChrome(containerWidth, containerHeight)}}`;
         }} else if (PREVIEW_POSITIONING_MODE === 'AnchorToCard') {{
             // Anchor to card: position via translate3d and update each frame in
             // attachAnchorTracker so the preview follows the card on scroll.
@@ -1106,55 +1242,12 @@ public class HoverTrailerController : ControllerBase
                 : {{ x: rawX, y: rawY }};
             const anchorX = pinned.x;
             const anchorY = pinned.y;
-            containerStyles = `
-                position: fixed;
-                top: ${{anchorY}}px;
-                left: ${{anchorX}}px;
-                width: ${{containerWidth}}px;
-                height: ${{containerHeight}}px;
-                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
-                /* Compositor-level clip — overflow:hidden + border-radius
-                   isn't enough when the iframe child has transform: scale(),
-                   which puts it on its own GPU layer that escapes the
-                   parent's rounded clip in Chromium. clip-path forces strict
-                   raster clipping so the corners stay round.
-                   Also: positioning via top/left here (instead of
-                   transform: translate3d) is a Chromium workaround — any
-                   transform on this container makes its own bottom-left
-                   corner refuse to clip, regardless of border-radius /
-                   clip-path / overflow:hidden combination. */
-                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
-                overflow: hidden;
-                background: #000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                z-index: 10000;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            `;
+            // top/left (not transform) — any transform on this container makes
+            // its bottom-left corner refuse to clip in Chromium.
+            containerStyles = `position: fixed; top: ${{anchorY}}px; left: ${{anchorX}}px;${{htContainerChrome(containerWidth, containerHeight)}}`;
         }} else {{
-            containerStyles = `
-                position: fixed;
-                top: calc(${{cardCenterY}}px + ${{PREVIEW_OFFSET_Y}}px);
-                left: calc(${{cardCenterX}}px + ${{PREVIEW_OFFSET_X}}px);
-                transform: translate(-50%, -50%);
-                width: ${{containerWidth}}px;
-                height: ${{containerHeight}}px;
-                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
-                /* Compositor-level clip — overflow:hidden + border-radius
-                   isn't enough when the iframe child has transform: scale(),
-                   which puts it on its own GPU layer that escapes the
-                   parent's rounded clip in Chromium. clip-path forces strict
-                   raster clipping so the corners stay round. */
-                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
-                overflow: hidden;
-                background: #000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                z-index: 10000;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            `;
+            // Custom: card-relative position with offsets.
+            containerStyles = `position: fixed; top: calc(${{cardCenterY}}px + ${{PREVIEW_OFFSET_Y}}px); left: calc(${{cardCenterX}}px + ${{PREVIEW_OFFSET_X}}px); transform: translate(-50%, -50%);${{htContainerChrome(containerWidth, containerHeight)}}`;
         }}
 
         container.style.cssText = containerStyles;
@@ -1228,7 +1321,11 @@ public class HoverTrailerController : ControllerBase
             // Use shorter delay since we're just setting volume and quality, not waiting for autoplay
             setTimeout(() => {{
                 try {{
-                    const volumePercent = ENABLE_PREVIEW_AUDIO ? PREVIEW_VOLUME : 0;
+                    // Seed from the per-device saved volume/mute (#20), falling
+                    // back to the configured PREVIEW_VOLUME on first use.
+                    const savedVol = htEffectiveVolume();
+                    const savedMuted = htEffectiveMuted();
+                    const volumePercent = ENABLE_PREVIEW_AUDIO ? savedVol : 0;
 
                     // Set playback quality using IFrame API (2025 method)
                     if (REMOTE_VIDEO_QUALITY !== 'adaptive') {{
@@ -1244,11 +1341,13 @@ public class HoverTrailerController : ControllerBase
                     // postMessage unMute fires without prior user activation,
                     // so keep muted until the document has sticky activation.
                     const hasUserActivation = !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
-                    if (volumePercent === 0 || !hasUserActivation) {{
-                        log('YouTube iframe kept muted (volume=0, audio disabled, or no user activation yet)');
+                    // Always push the saved level first so an eventual unmute
+                    // reveals it at the right volume (setVolume is safe while muted).
+                    iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'setVolume',args:[volumePercent]}}), '*');
+                    if (volumePercent === 0 || savedMuted || !hasUserActivation) {{
+                        log('YouTube iframe kept muted (volume=0, audio off, user-muted, or no activation yet)');
                     }} else {{
                         iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'unMute',args:''}}), '*');
-                        iframe.contentWindow.postMessage(JSON.stringify({{event:'command',func:'setVolume',args:[volumePercent]}}), '*');
                         log('YouTube iframe unmuted and volume set to ' + volumePercent + '%');
                     }}
                 }} catch (e) {{
@@ -1282,34 +1381,21 @@ public class HoverTrailerController : ControllerBase
             containerHeight = PREVIEW_HEIGHT;
         }}
 
+        // Fix Position mode: a remembered drag-resize (#20) overrides the
+        // computed size. Must run before the iframe scale calc below.
+        if (PREVIEW_POSITIONING_MODE === 'Center') {{
+            const sz = htFixedSize(containerWidth, containerHeight);
+            containerWidth = sz.w; containerHeight = sz.h;
+        }}
+
         // Calculate positioning based on positioning mode
         let containerStyles;
         if (PREVIEW_POSITIONING_MODE === 'Center') {{
-            // Center the preview in the viewport
-            containerStyles = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: ${{containerWidth}}px;
-                height: ${{containerHeight}}px;
-                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
-                /* Compositor-level clip — overflow:hidden + border-radius
-                   isn't enough when the iframe child has transform: scale(),
-                   which puts it on its own GPU layer that escapes the
-                   parent's rounded clip in Chromium. clip-path forces strict
-                   raster clipping so the corners stay round. */
-                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
-                overflow: hidden;
-                background: #000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                z-index: 10000;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            `;
+            // Fix Position Mode (#20): percentage-anchored preset, or a
+            // remembered drag position; either clamped to the viewport.
+            containerStyles = `position: fixed; ${{htFixedPlacementCss(containerWidth, containerHeight)}}${{htContainerChrome(containerWidth, containerHeight)}}`;
         }} else if (PREVIEW_POSITIONING_MODE === 'AnchorToCard') {{
-            // Anchor to card: position via translate3d and update each frame in
+            // Anchor to card: position via top/left and update each frame in
             // attachAnchorTracker so the preview follows the card on scroll.
             // PREVIEW_OFFSET_X/Y apply as a delta from the card center.
             const rawX = Math.round(cardRect.left + cardRect.width / 2 - containerWidth / 2 + PREVIEW_OFFSET_X);
@@ -1322,56 +1408,12 @@ public class HoverTrailerController : ControllerBase
                 : {{ x: rawX, y: rawY }};
             const anchorX = pinned.x;
             const anchorY = pinned.y;
-            containerStyles = `
-                position: fixed;
-                top: ${{anchorY}}px;
-                left: ${{anchorX}}px;
-                width: ${{containerWidth}}px;
-                height: ${{containerHeight}}px;
-                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
-                /* Compositor-level clip — overflow:hidden + border-radius
-                   isn't enough when the iframe child has transform: scale(),
-                   which puts it on its own GPU layer that escapes the
-                   parent's rounded clip in Chromium. clip-path forces strict
-                   raster clipping so the corners stay round.
-                   Also: positioning via top/left here (instead of
-                   transform: translate3d) is a Chromium workaround — any
-                   transform on this container makes its own bottom-left
-                   corner refuse to clip, regardless of border-radius /
-                   clip-path / overflow:hidden combination. */
-                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
-                overflow: hidden;
-                background: #000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                z-index: 10000;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            `;
+            // top/left (not transform) — any transform on this container makes
+            // its bottom-left corner refuse to clip in Chromium.
+            containerStyles = `position: fixed; top: ${{anchorY}}px; left: ${{anchorX}}px;${{htContainerChrome(containerWidth, containerHeight)}}`;
         }} else {{
-            // Custom positioning relative to card with offsets
-            containerStyles = `
-                position: fixed;
-                top: calc(${{cardCenterY}}px + ${{PREVIEW_OFFSET_Y}}px);
-                left: calc(${{cardCenterX}}px + ${{PREVIEW_OFFSET_X}}px);
-                transform: translate(-50%, -50%);
-                width: ${{containerWidth}}px;
-                height: ${{containerHeight}}px;
-                border-radius: ${{PREVIEW_BORDER_RADIUS}}px;
-                /* Compositor-level clip — overflow:hidden + border-radius
-                   isn't enough when the iframe child has transform: scale(),
-                   which puts it on its own GPU layer that escapes the
-                   parent's rounded clip in Chromium. clip-path forces strict
-                   raster clipping so the corners stay round. */
-                clip-path: inset(0 round ${{PREVIEW_BORDER_RADIUS}}px);
-                overflow: hidden;
-                background: #000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                z-index: 10000;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.3s ease;
-            `;
+            // Custom: card-relative position with offsets.
+            containerStyles = `position: fixed; top: calc(${{cardCenterY}}px + ${{PREVIEW_OFFSET_Y}}px); left: calc(${{cardCenterX}}px + ${{PREVIEW_OFFSET_X}}px); transform: translate(-50%, -50%);${{htContainerChrome(containerWidth, containerHeight)}}`;
         }}
 
         // Apply the container styles
@@ -1385,7 +1427,9 @@ public class HoverTrailerController : ControllerBase
         `;
 
         video.src = trailerPath;
-        video.muted = !ENABLE_PREVIEW_AUDIO;
+        // Honor a persisted mute (#20) so a user who muted a YouTube preview
+        // also gets a muted local trailer; default is config-driven.
+        video.muted = !ENABLE_PREVIEW_AUDIO || htEffectiveMuted();
         video.loop = ENABLE_TRAILER_LOOP;
         video.preload = 'metadata';
         if (!ENABLE_TRAILER_LOOP) {{
@@ -1395,13 +1439,21 @@ public class HoverTrailerController : ControllerBase
             video.addEventListener('ended', () => hidePreview());
         }}
 
-        // Set volume based on configuration (0-100 range converted to 0.0-1.0)
+        // Set volume from the per-device saved level (#20), falling back to
+        // the configured PREVIEW_VOLUME (0-100 range converted to 0.0-1.0).
         if (ENABLE_PREVIEW_AUDIO) {{
-            video.volume = PREVIEW_VOLUME / 100.0;
+            video.volume = htEffectiveVolume() / 100.0;
         }}
 
         // Append video to container
         container.appendChild(video);
+
+        // Local trailers get the same controls overlay as YouTube (#20),
+        // wired straight to the <video> element. Same gating as the YouTube
+        // path (requires persistent preview to be reachable).
+        if (ENABLE_TRAILER_CONTROLS) {{
+            attachVideoControls(container, video);
+        }}
 
         return container;
     }}
@@ -1522,7 +1574,7 @@ public class HoverTrailerController : ControllerBase
             '<span class=""ht-time ht-duration"">0:00</span>' +
             '<div class=""ht-volume-wrap"">' +
             '<button class=""ht-control-btn ht-mute"" type=""button"" aria-label=""Mute/unmute"">' + ICON_VOL_MUTE + '</button>' +
-            '<input type=""range"" class=""ht-volume"" min=""0"" max=""100"" value=""' + PREVIEW_VOLUME + '"" aria-label=""Volume"">' +
+            '<input type=""range"" class=""ht-volume"" min=""0"" max=""100"" value=""' + htEffectiveVolume() + '"" aria-label=""Volume"">' +
             '</div>' +
             '<button class=""ht-control-btn ht-fs"" type=""button"" aria-label=""Toggle fullscreen"">' + ICON_FS_ENTER + '</button>';
         container.appendChild(controls);
@@ -1537,6 +1589,7 @@ public class HoverTrailerController : ControllerBase
 
         let isPaused = false;
         let isMuted = true; // existing code starts muted until user activation
+        let muteKnown = false; // true once infoDelivery reports authoritative muted state (#20)
         let isSeeking = false;
         let lastUserVolumeAt = 0;
         // Track whether the cursor is currently over any part of the preview
@@ -1580,7 +1633,12 @@ public class HoverTrailerController : ControllerBase
         }});
         muteBtn.addEventListener('click', (e) => {{
             e.stopPropagation();
+            const willMute = !isMuted;
             ytCommand(iframe, isMuted ? 'unMute' : 'mute');
+            // Only persist once the player's real mute state is known, so a
+            // click in the brief pre-infoDelivery window can't durably store
+            // the wrong direction (#20).
+            if (muteKnown) htWritePrefs({{ muted: willMute }});
         }});
         fsBtn.addEventListener('click', (e) => {{
             e.stopPropagation();
@@ -1619,6 +1677,9 @@ public class HoverTrailerController : ControllerBase
             lastUserVolumeAt = Date.now();
             if (v > 0 && isMuted) ytCommand(iframe, 'unMute');
             ytCommand(iframe, 'setVolume', [v]);
+            // Remember the manually-set level (and implied mute at 0) per
+            // device (#20). localStorage writes are sync + cheap, no debounce.
+            htWritePrefs({{ volume: v, muted: v === 0 }});
         }});
         volEl.addEventListener('click', (e) => e.stopPropagation());
 
@@ -1645,6 +1706,7 @@ public class HoverTrailerController : ControllerBase
             }}
             if (info.muted !== undefined) {{
                 isMuted = !!info.muted;
+                muteKnown = true;
                 muteBtn.innerHTML = isMuted ? ICON_VOL_MUTE : ICON_VOL;
             }}
             if (info.volume !== undefined && Date.now() - lastUserVolumeAt > 500) {{
@@ -1683,6 +1745,168 @@ public class HoverTrailerController : ControllerBase
         // Cleanup hook called by hidePreview
         container._htControlsCleanup = () => {{
             window.removeEventListener('message', onMessage);
+            document.removeEventListener('fullscreenchange', onFsChange);
+            if (hideTimer) {{ clearTimeout(hideTimer); hideTimer = null; }}
+            if (document.fullscreenElement === container) {{
+                document.exitFullscreen().catch(() => {{}});
+            }}
+        }};
+    }}
+
+    // Local <video> controls (#20): the same overlay bar as the YouTube path,
+    // but wired to the HTMLVideoElement API (play/pause, currentTime, duration,
+    // volume, muted, fullscreen) instead of YouTube's postMessage channel.
+    // Stores a cleanup function on container._htControlsCleanup for hidePreview.
+    function attachVideoControls(container, video) {{
+        video.classList.add('ht-local-video');
+
+        const controls = document.createElement('div');
+        controls.className = 'ht-controls';
+        const controlsBg = document.createElement('div');
+        controlsBg.className = 'ht-controls-bg';
+        controlsBg.style.clipPath = 'inset(0 round 0 0 ' + PREVIEW_BORDER_RADIUS + 'px ' + PREVIEW_BORDER_RADIUS + 'px)';
+        controls.appendChild(controlsBg);
+
+        controls.innerHTML +=
+            '<button class=""ht-control-btn ht-play-pause"" type=""button"" aria-label=""Play/pause"">' + ICON_PAUSE + '</button>' +
+            '<span class=""ht-time ht-current"">0:00</span>' +
+            '<input type=""range"" class=""ht-seek"" min=""0"" max=""100"" value=""0"" step=""0.1"" aria-label=""Seek"">' +
+            '<span class=""ht-time ht-duration"">0:00</span>' +
+            '<div class=""ht-volume-wrap"">' +
+            '<button class=""ht-control-btn ht-mute"" type=""button"" aria-label=""Mute/unmute"">' + ICON_VOL_MUTE + '</button>' +
+            '<input type=""range"" class=""ht-volume"" min=""0"" max=""100"" value=""' + htEffectiveVolume() + '"" aria-label=""Volume"">' +
+            '</div>' +
+            '<button class=""ht-control-btn ht-fs"" type=""button"" aria-label=""Toggle fullscreen"">' + ICON_FS_ENTER + '</button>';
+        container.appendChild(controls);
+
+        const playPauseBtn = controls.querySelector('.ht-play-pause');
+        const muteBtn      = controls.querySelector('.ht-mute');
+        const fsBtn        = controls.querySelector('.ht-fs');
+        const seekEl       = controls.querySelector('.ht-seek');
+        const volEl        = controls.querySelector('.ht-volume');
+        const curEl        = controls.querySelector('.ht-current');
+        const durEl        = controls.querySelector('.ht-duration');
+
+        let isSeeking = false;
+        let mouseInPreview = false;
+
+        const isVidMuted = () => video.muted || video.volume === 0;
+        playPauseBtn.innerHTML = video.paused ? ICON_PLAY : ICON_PAUSE;
+        muteBtn.innerHTML = isVidMuted() ? ICON_VOL_MUTE : ICON_VOL;
+
+        // Auto-show on hover, fade out 350ms after leaving (mirrors YouTube path).
+        let hideTimer = null;
+        function showCtrls() {{
+            if (hideTimer) {{ clearTimeout(hideTimer); hideTimer = null; }}
+            controls.classList.add('visible');
+        }}
+        function hideCtrlsLater() {{
+            if (document.fullscreenElement) return;
+            if (mouseInPreview) return;
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => controls.classList.remove('visible'), 350);
+        }}
+        function onPreviewEnter() {{ mouseInPreview = true; showCtrls(); }}
+        function onPreviewLeave() {{ mouseInPreview = false; hideCtrlsLater(); }}
+        // No click-absorbing mask here (a local <video> has no native overlay
+        // to suppress), so hover is driven by the video element directly.
+        video.addEventListener('mouseenter', onPreviewEnter);
+        video.addEventListener('mouseleave', onPreviewLeave);
+        controls.addEventListener('mouseenter', onPreviewEnter);
+        controls.addEventListener('mouseleave', onPreviewLeave);
+        setTimeout(showCtrls, 800);
+        setTimeout(hideCtrlsLater, 2800);
+
+        playPauseBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            if (video.paused) video.play().catch(() => {{}}); else video.pause();
+        }});
+        muteBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            const willMute = !isVidMuted();
+            video.muted = willMute;
+            htWritePrefs({{ muted: willMute }}); // remember explicit mute toggle (#20)
+        }});
+        fsBtn.addEventListener('click', (e) => {{
+            e.stopPropagation();
+            if (document.fullscreenElement) {{
+                document.exitFullscreen();
+            }} else {{
+                const req = container.requestFullscreen
+                    ? container.requestFullscreen.bind(container)
+                    : (container.webkitRequestFullscreen
+                        ? container.webkitRequestFullscreen.bind(container)
+                        : null);
+                if (req) req().catch(err => log('FS request failed:', err));
+            }}
+        }});
+
+        seekEl.addEventListener('pointerdown', () => {{ isSeeking = true; }});
+        seekEl.addEventListener('input', (e) => {{
+            e.stopPropagation();
+            if (isSeeking) curEl.textContent = fmtTime(parseFloat(seekEl.value));
+        }});
+        seekEl.addEventListener('change', (e) => {{
+            e.stopPropagation();
+            const t = parseFloat(seekEl.value);
+            if (isFinite(t)) video.currentTime = t;
+            setTimeout(() => {{ isSeeking = false; }}, 100);
+        }});
+        seekEl.addEventListener('click', (e) => e.stopPropagation());
+
+        volEl.addEventListener('input', (e) => {{
+            e.stopPropagation();
+            const v = parseInt(volEl.value, 10);
+            video.volume = Math.min(1, Math.max(0, v / 100));
+            if (v > 0) video.muted = false;
+            htWritePrefs({{ volume: v, muted: v === 0 }}); // per-device (#20)
+        }});
+        volEl.addEventListener('click', (e) => e.stopPropagation());
+
+        // Reflect the element's own state into the bar.
+        function syncPlay() {{ playPauseBtn.innerHTML = video.paused ? ICON_PLAY : ICON_PAUSE; }}
+        function syncMeta() {{
+            // Jellyfin's /stream can report a non-finite duration (remux/no
+            // known length). When the length is unknown there's nothing to
+            // seek against, so hide the seek bar + time labels — but with
+            // visibility:hidden so the seek's flex:1 still spaces the bar
+            // (play stays left, volume/fullscreen stay right).
+            const d = video.duration;
+            const known = !!(d && isFinite(d) && d > 0);
+            if (known && parseFloat(seekEl.max) !== d) seekEl.max = d;
+            durEl.textContent = known ? fmtTime(d) : '0:00';
+            const vis = known ? 'visible' : 'hidden';
+            seekEl.style.visibility = vis;
+            curEl.style.visibility = vis;
+            durEl.style.visibility = vis;
+        }}
+        function syncTime() {{
+            if (isSeeking) return;
+            seekEl.value = video.currentTime;
+            curEl.textContent = fmtTime(video.currentTime);
+        }}
+        function syncVol() {{ muteBtn.innerHTML = isVidMuted() ? ICON_VOL_MUTE : ICON_VOL; }}
+        video.addEventListener('play', syncPlay);
+        video.addEventListener('pause', syncPlay);
+        video.addEventListener('loadedmetadata', syncMeta);
+        video.addEventListener('durationchange', syncMeta);
+        video.addEventListener('timeupdate', syncTime);
+        video.addEventListener('volumechange', syncVol);
+        syncMeta();
+
+        const onFsChange = () => {{
+            const isFs = !!document.fullscreenElement;
+            fsBtn.innerHTML = isFs ? ICON_FS_EXIT : ICON_FS_ENTER;
+            if (!isFs) {{
+                suppressEscapeOnce = true;
+                setTimeout(() => {{ suppressEscapeOnce = false; }}, 250);
+                recentFsExit = true;
+                setTimeout(() => {{ recentFsExit = false; }}, 600);
+            }}
+        }};
+        document.addEventListener('fullscreenchange', onFsChange);
+
+        container._htControlsCleanup = () => {{
             document.removeEventListener('fullscreenchange', onFsChange);
             if (hideTimer) {{ clearTimeout(hideTimer); hideTimer = null; }}
             if (document.fullscreenElement === container) {{
@@ -1740,6 +1964,133 @@ public class HoverTrailerController : ControllerBase
         anchorTrackerRafId = requestAnimationFrame(tick);
     }}
 
+    // Fix Position Mode drag-to-move and drag-to-resize (#20). Adds a move
+    // grip (top-left) and a resize grip (top-right) as pointer-events:auto
+    // children that work with or without the controls bar. Position and size
+    // are written to localStorage on release (as viewport fractions) and
+    // restored on the next preview. innerEl is the YouTube iframe (whose CSS
+    // scale must be re-derived on resize) or null for a local <video> that
+    // already fills the container at 100%/100%. Pointer capture keeps the
+    // gesture alive even while the cursor is over the YouTube iframe (a
+    // separate browsing context that would otherwise swallow the events).
+    function attachDragResize(container, innerEl) {{
+        const ICON_MOVE = `<svg viewBox=""0 0 24 24""><path d=""M13 6v5h5V7.5L22.5 12 18 16.5V13h-5v5h3.5L12 22.5 7.5 18H11v-5H6v3.5L1.5 12 6 7.5V11h5V6H7.5L12 1.5 16.5 6H13z"" fill=""currentColor""/></svg>`;
+        const ICON_RESIZE = `<svg viewBox=""0 0 24 24""><path d=""M22 9V2h-7l2.79 2.79-4.88 4.88 1.42 1.42 4.88-4.88L22 9zM4.79 22H11l-2.79-2.79 4.88-4.88-1.42-1.42-4.88 4.88L2 17v5z"" fill=""currentColor""/></svg>`;
+        const moveGrip = document.createElement('div');
+        moveGrip.className = 'ht-move-grip';
+        moveGrip.title = 'Drag to move · double-click to reset';
+        moveGrip.innerHTML = ICON_MOVE;
+        const resizeGrip = document.createElement('div');
+        resizeGrip.className = 'ht-resize-grip';
+        resizeGrip.title = 'Drag to resize';
+        resizeGrip.innerHTML = ICON_RESIZE;
+        container.appendChild(moveGrip);
+        container.appendChild(resizeGrip);
+
+        // Switch the container from a preset anchor (which may use right/bottom
+        // or a transform) to absolute top/left so px deltas apply cleanly.
+        function anchorAbsolute() {{
+            const r = container.getBoundingClientRect();
+            container.style.transform = 'none';
+            container.style.right = 'auto';
+            container.style.bottom = 'auto';
+            container.style.left = r.left + 'px';
+            container.style.top = r.top + 'px';
+            return r;
+        }}
+
+        // ── Move ──
+        let mStartX, mStartY, mLeft, mTop;
+        function onMoveMove(e) {{
+            const c = clampAnchorToViewport(
+                mLeft + (e.clientX - mStartX),
+                mTop + (e.clientY - mStartY),
+                container.offsetWidth, container.offsetHeight);
+            container.style.left = c.x + 'px';
+            container.style.top = c.y + 'px';
+        }}
+        // Shared teardown: runs on pointerup AND pointercancel (browser-stolen
+        // gesture — context menu, focus loss, etc.) so the move listener is
+        // always removed and htInteracting can't get stuck (a stuck flag would
+        // otherwise suppress the next click-outside dismiss).
+        function endMove(e) {{
+            moveGrip.removeEventListener('pointermove', onMoveMove);
+            moveGrip.removeEventListener('pointerup', endMove);
+            moveGrip.removeEventListener('pointercancel', endMove);
+            moveGrip.classList.remove('ht-grabbing');
+            try {{ moveGrip.releasePointerCapture(e.pointerId); }} catch (_) {{}}
+            // Skip persistence (and a detached-element rect) if the preview was
+            // torn down mid-drag.
+            if (container.isConnected && currentPreview === container) {{
+                const r = container.getBoundingClientRect();
+                htWritePrefs({{ posXPct: r.left / window.innerWidth, posYPct: r.top / window.innerHeight }});
+            }}
+            setTimeout(() => {{ htInteracting = false; }}, 50);
+        }}
+        moveGrip.addEventListener('pointerdown', (e) => {{
+            e.preventDefault(); e.stopPropagation();
+            htInteracting = true;
+            moveGrip.classList.add('ht-grabbing');
+            try {{ moveGrip.setPointerCapture(e.pointerId); }} catch (_) {{}}
+            const r = anchorAbsolute();
+            mStartX = e.clientX; mStartY = e.clientY; mLeft = r.left; mTop = r.top;
+            moveGrip.addEventListener('pointermove', onMoveMove);
+            moveGrip.addEventListener('pointerup', endMove);
+            moveGrip.addEventListener('pointercancel', endMove);
+        }});
+        moveGrip.addEventListener('click', (e) => e.stopPropagation());
+        moveGrip.addEventListener('dblclick', (e) => {{
+            e.preventDefault(); e.stopPropagation();
+            htClearPlacement();
+            hidePreview(); // next hover renders at the configured preset/size
+        }});
+
+        // ── Resize (aspect-locked to the horizontal drag) ──
+        let rStartX, rStartW, rAspect;
+        function onResizeMove(e) {{
+            const minW = 160;
+            let nw = rStartW + (e.clientX - rStartX);
+            nw = Math.max(minW, Math.min(nw, window.innerWidth * 0.95));
+            let nh = Math.round(nw / rAspect);
+            if (nh > window.innerHeight * 0.95) {{
+                nh = Math.round(window.innerHeight * 0.95);
+                nw = Math.round(nh * rAspect);
+            }}
+            container.style.width = nw + 'px';
+            container.style.height = nh + 'px';
+            if (innerEl) {{
+                const sx = nw / NATIVE_IFRAME_DIMS.w;
+                const sy = nh / NATIVE_IFRAME_DIMS.h;
+                innerEl.style.transform = `scale(${{sx}}, ${{sy}})`;
+                innerEl.style.clipPath = `inset(0 round ${{Math.round(PREVIEW_BORDER_RADIUS / sx)}}px)`;
+            }}
+        }}
+        function endResize(e) {{
+            resizeGrip.removeEventListener('pointermove', onResizeMove);
+            resizeGrip.removeEventListener('pointerup', endResize);
+            resizeGrip.removeEventListener('pointercancel', endResize);
+            try {{ resizeGrip.releasePointerCapture(e.pointerId); }} catch (_) {{}}
+            if (container.isConnected && currentPreview === container) {{
+                const r = container.getBoundingClientRect();
+                // Store width fraction + aspect (not a height fraction) so the
+                // locked ratio survives a different-aspect viewport on restore.
+                htWritePrefs({{ wPct: r.width / window.innerWidth, aspect: (r.width / r.height) || (16 / 9) }});
+            }}
+            setTimeout(() => {{ htInteracting = false; }}, 50);
+        }}
+        resizeGrip.addEventListener('pointerdown', (e) => {{
+            e.preventDefault(); e.stopPropagation();
+            htInteracting = true;
+            try {{ resizeGrip.setPointerCapture(e.pointerId); }} catch (_) {{}}
+            const r = anchorAbsolute();
+            rStartX = e.clientX; rStartW = r.width; rAspect = (r.width / r.height) || (16 / 9);
+            resizeGrip.addEventListener('pointermove', onResizeMove);
+            resizeGrip.addEventListener('pointerup', endResize);
+            resizeGrip.addEventListener('pointercancel', endResize);
+        }});
+        resizeGrip.addEventListener('click', (e) => e.stopPropagation());
+    }}
+
     // Persistent-preview dismissers: a document-level click or Escape key
     // tears down the current preview. Listeners are attached when the preview
     // shows and removed in hidePreview. The click handler uses capture-phase
@@ -1748,6 +2099,9 @@ public class HoverTrailerController : ControllerBase
     function attachPersistentDismissers() {{
         detachPersistentDismissers();
         const onClick = (e) => {{
+            // Mid drag-move/resize (#20): a pointerup that lands outside the
+            // preview must not be treated as a dismiss click.
+            if (htInteracting) return;
             // Clicks on the preview itself (controls bar, container) must
             // not dismiss — only outside-clicks tear it down.
             if (currentPreview && currentPreview.contains(e.target)) return;
@@ -1873,7 +2227,7 @@ public class HoverTrailerController : ControllerBase
                             vqParam;
                         log('Converted to YouTube nocookie embed URL:', videoSource);
                         log('Using youtube-nocookie.com to prevent Error 153');
-                        log('YouTube quality: ' + REMOTE_VIDEO_QUALITY + ', Volume: ' + PREVIEW_VOLUME + '%');
+                        log('YouTube quality: ' + REMOTE_VIDEO_QUALITY + ', Volume: ' + htEffectiveVolume() + '%');
                     }} else {{
                         log('Failed to extract YouTube video ID from:', youtubeUrl);
                         throw new Error('Invalid YouTube URL format');
@@ -1900,6 +2254,15 @@ public class HoverTrailerController : ControllerBase
                 // YouTube and local-video paths.
                 if (PREVIEW_POSITIONING_MODE === 'AnchorToCard') {{
                     attachAnchorTracker(container, element);
+                }}
+
+                // Fix Position mode: enable drag-to-move / drag-to-resize (#20).
+                // Pass the iframe (remote) so resize can re-derive its scale;
+                // local <video> fills the container so null is fine. Gated on
+                // persistence — without it the preview tears down on mouseleave
+                // before the cursor can reach a grip, so they'd be dead UI.
+                if (PREVIEW_POSITIONING_MODE === 'Center' && ENABLE_PERSISTENT_PREVIEW) {{
+                    attachDragResize(container, trailerInfo.IsRemote ? video : null);
                 }}
 
                 // Persistent preview: install document-level listeners so the
@@ -1961,6 +2324,13 @@ public class HoverTrailerController : ControllerBase
                             // Check if preview is still active and card element exists
                             if (!currentPreview || !currentCardElement) {{
                                 log('Preview was cancelled before loadedmetadata, skipping resize');
+                                return;
+                            }}
+
+                            // A remembered drag-resize (#20) in Fix Position
+                            // mode takes precedence over FitContent sizing.
+                            if (PREVIEW_POSITIONING_MODE === 'Center' && htHasSavedSize()) {{
+                                log('FitContent resize skipped — remembered drag-resize size in effect');
                                 return;
                             }}
 
@@ -2037,6 +2407,7 @@ public class HoverTrailerController : ControllerBase
     function hidePreview() {{
         // Invalidate any in-flight fetch and abort it
         previewGeneration++;
+        htInteracting = false; // clear any stuck drag/resize state (#20)
         if (currentAbortController) {{
             currentAbortController.abort();
             currentAbortController = null;

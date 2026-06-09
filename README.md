@@ -65,12 +65,13 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 
 **Playback**
 - Netflix-style hover preview with configurable delay
-- Multi-source trailer detection: local files, remote YouTube, and optional theme-video fallback
-- Audio on/off with adjustable volume (muted during autoplay until the page has user activation — browser policy)
+- Multi-source trailer detection with a fixed priority — **local trailer file → remote YouTube → theme-video fallback** (first match wins; theme-video fallback is optional)
+- Audio on/off with adjustable volume; the volume and mute you set on the player are **remembered per device** (muted during autoplay until the page has user activation — browser policy)
+- Interactive control bar (play/pause, seek, volume, mute, fullscreen) on **both YouTube and local** trailer previews (requires Persistent preview; the seek bar hides automatically when a local stream reports no duration)
 - Hover progress indicator on the card during the delay
 
 **Positioning modes**
-- **Center** — preview is centered in the viewport (default)
+- **Fix Position** — preview is pinned to a fixed, percentage-based spot: **center** or any of the four **corners** (with an adjustable corner margin, so it stays correct across resolutions). In this mode you can also **drag the preview to move it** and **drag the corner handle to resize it** while it plays — the position and size are remembered per device. Double-click the move handle to reset to the configured spot.
 - **Custom** — preview is centered on the card with configurable offsets
 - **Anchor to Card** — preview follows the card as the page scrolls (tethered)
 
