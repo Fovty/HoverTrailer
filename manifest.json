@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.3.0.0",
+        "changelog": "- feat(ui): persistent volume/mute, Fix Position mode, drag move/resize, local-trailer controls (#20)",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.3.0.0/HoverTrailer-0.3.0.0-server.zip",
+        "checksum": "ebaf41298d43ce8752207dc0ddc2c0ad",
+        "timestamp": "2026-06-09T20:08:36Z"
+      },
+      {
         "version": "0.2.9.1",
         "changelog": "- feat(loop): opt-in stop-on-end so trailers don't loop forever",
         "targetAbi": "10.11.0.0",
