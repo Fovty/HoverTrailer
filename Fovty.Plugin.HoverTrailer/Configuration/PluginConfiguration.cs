@@ -64,11 +64,22 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets whether the preview should keep playing after the cursor
-    /// leaves the card. When true, the preview is only dismissed by clicking
-    /// anywhere, pressing Escape, or hovering a different card long enough
-    /// for a new preview to start.
+    /// leaves the card. When true, the preview is dismissed by clicking
+    /// anywhere or pressing Escape. (Hovering a different card swaps to its
+    /// trailer only when <see cref="LockTrailerWhilePlaying"/> is disabled.)
     /// </summary>
     public bool EnablePersistentPreview { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether an already-playing (or still-loading) persistent
+    /// preview is protected from being replaced when the cursor passes over
+    /// another card. When true (default), a new trailer is not started while
+    /// one is already playing — the user dismisses the current preview first
+    /// (click away or press Escape) to switch. When false, hovering a different
+    /// card long enough swaps to its trailer (the previous behaviour). Only
+    /// applies when <see cref="EnablePersistentPreview"/> is enabled.
+    /// </summary>
+    public bool LockTrailerWhilePlaying { get; set; } = true;
 
     /// <summary>
     /// Gets or sets whether keyboard/D-pad focus on a card triggers the

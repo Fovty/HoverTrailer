@@ -206,7 +206,15 @@
                                     <input id="EnablePersistentPreview" name="EnablePersistentPreview" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Keep preview playing after cursor leaves card</span>
                                 <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
-                                <div class="fieldDescription">When enabled, the preview stays visible until you click anywhere, press Escape, or hover a different card long enough for a new preview to start.</div>
+                                <div class="fieldDescription">When enabled, the preview stays visible until you click anywhere or press Escape. (With "Don't replace a playing trailer" off, hovering a different card swaps to its trailer.)</div>
+                            </div>
+
+                            <div class="checkboxContainer" id="lockTrailerContainer">
+                                <label class="emby-checkbox-label">
+                                    <input id="LockTrailerWhilePlaying" name="LockTrailerWhilePlaying" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Don't replace a playing trailer when the cursor moves over other cards</span>
+                                <span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label>
+                                <div class="fieldDescription">When enabled (default), a trailer that is already playing or loading is never torn down to start another card's trailer — so moving the cursor across the grid won't accidentally switch trailers. To watch a different one, dismiss the current preview first (click away or press Escape). Requires the persistent option above. When disabled, hovering a different card long enough swaps to its trailer (the previous behaviour).</div>
                             </div>
 
                             <div class="checkboxContainer" id="trailerControlsContainer">
@@ -386,6 +394,7 @@
                     document.querySelector('#BackgroundBlurFalloffRadius').value = config.BackgroundBlurFalloffRadius || 200;
                     document.querySelector('#EnableToastNotifications').checked = config.EnableToastNotifications !== false;
                     document.querySelector('#EnablePersistentPreview').checked = config.EnablePersistentPreview || false;
+                    document.querySelector('#LockTrailerWhilePlaying').checked = config.LockTrailerWhilePlaying !== false;
                     document.querySelector('#EnableFocusTrigger').checked = config.EnableFocusTrigger || false;
                     document.querySelector('#EnableAnchorPinToViewport').checked = config.EnableAnchorPinToViewport || false;
                     document.querySelector('#EnableTrailerControls').checked = config.EnableTrailerControls !== false;
@@ -441,6 +450,7 @@
                     config.EnableBackgroundBlur = config.BackgroundBlurMode !== 'Off';
                     config.EnableToastNotifications = document.querySelector('#EnableToastNotifications').checked;
                     config.EnablePersistentPreview = document.querySelector('#EnablePersistentPreview').checked;
+                    config.LockTrailerWhilePlaying = document.querySelector('#LockTrailerWhilePlaying').checked;
                     config.EnableFocusTrigger = document.querySelector('#EnableFocusTrigger').checked;
                     config.EnableAnchorPinToViewport = document.querySelector('#EnableAnchorPinToViewport').checked;
                     config.EnableTrailerControls = document.querySelector('#EnableTrailerControls').checked;
@@ -503,11 +513,13 @@
                 document.querySelector('#haloRadiusContainer').style.display = mode === 'Halo' ? 'block' : 'none';
             }
 
-            // Trailer controls only make sense when the preview persists past
-            // the cursor — without persistence the user can't reach them.
+            // Trailer controls and the playing-trailer lock only make sense when
+            // the preview persists past the cursor — without persistence the
+            // preview is torn down on mouseleave before either applies.
             function updateTrailerControlsVisibility() {
                 const persistent = document.querySelector('#EnablePersistentPreview').checked;
                 document.querySelector('#trailerControlsContainer').style.display = persistent ? 'block' : 'none';
+                document.querySelector('#lockTrailerContainer').style.display = persistent ? 'block' : 'none';
             }
 
             document.querySelector("#HoverTrailerConfigPage").addEventListener("pageshow", () => {

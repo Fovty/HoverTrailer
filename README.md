@@ -84,7 +84,7 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 - **Off** / **Full** (uniform blur over the page) / **Halo** (dense blur right next to the preview, fading out over a configurable radius — hides distracting nearby posters without dimming the whole screen)
 
 **Behavior options**
-- **Persistent preview** — keep playing after the cursor leaves the card; dismiss with click, Escape, or by hovering a different card long enough for a new preview to start
+- **Persistent preview** — keep playing after the cursor leaves the card; dismiss with click or Escape. By default a playing trailer is **not** replaced when the cursor passes over other cards (so you don't accidentally switch trailers); turn off **"Don't replace a playing trailer"** to restore hover-to-swap.
 - **Focus trigger** — keyboard/D-pad focus on a card triggers the preview (for Jellyfin Web in a TV browser or with spatial-navigation overlays). Mouse clicks don't re-trigger.
 
 ## Installation

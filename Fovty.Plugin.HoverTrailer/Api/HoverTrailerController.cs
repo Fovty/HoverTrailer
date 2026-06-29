@@ -477,6 +477,9 @@ public class HoverTrailerController : ControllerBase
     const ENABLE_TOAST_NOTIFICATIONS = {config.EnableToastNotifications.ToString().ToLower()};
     const ENABLE_HOVER_PROGRESS_INDICATOR = {config.EnableHoverProgressIndicator.ToString().ToLower()};
     const ENABLE_PERSISTENT_PREVIEW = {config.EnablePersistentPreview.ToString().ToLower()};
+    // Issue #23: when true, a playing/loading persistent preview is never
+    // replaced by hovering another card — the user must dismiss it first.
+    const LOCK_TRAILER_WHILE_PLAYING = {config.LockTrailerWhilePlaying.ToString().ToLower()};
     const ENABLE_FOCUS_TRIGGER = {config.EnableFocusTrigger.ToString().ToLower()};
     const ENABLE_ANCHOR_PIN_TO_VIEWPORT = {config.EnableAnchorPinToViewport.ToString().ToLower()};
     // Effective gating: trailer controls require Persistent Preview to be
@@ -501,6 +504,11 @@ public class HoverTrailerController : ControllerBase
     let currentPreview;
     let currentCardElement;
     let isPlaying = false;
+    // Issue #23: true while an intended preview's TrailerInfo fetch is in
+    // flight, BEFORE currentPreview is assigned (that only happens after the
+    // fetch resolves). The lock checks this so a second card hovered during
+    // the network window can't slip through and abort the intended fetch.
+    let previewPending = false;
     let resizeHandler;
     let anchorTrackerRafId = null;
     let anchorScrollHandler = null; // capture-phase scroll listener for AnchorToCard
@@ -2131,8 +2139,22 @@ public class HoverTrailerController : ControllerBase
     function showPreview(element, itemId) {{
         if (isPlaying) return;
 
-        // In persistent mode, a new hover replaces the old preview. Otherwise,
-        // an existing preview blocks a new one until it is dismissed.
+        // Issue #23: in persistent mode with the lock on, a trailer that is
+        // already playing (currentPreview) OR still loading (previewPending)
+        // is never torn down to start another card's trailer. Dwelling over a
+        // different card no longer swaps — the user dismisses first (click
+        // away / Escape). previewPending covers the network window because
+        // currentPreview is only assigned after the fetch resolves below.
+        if (ENABLE_PERSISTENT_PREVIEW && LOCK_TRAILER_WHILE_PLAYING && (currentPreview || previewPending)) {{
+            // Clear the would-be card's progress ring so it doesn't falsely
+            // promise a trailer that won't start (pass the transited card).
+            hideProgressIndicator(element);
+            return;
+        }}
+
+        // Lock off (or non-persistent): a new hover in persistent mode replaces
+        // the old preview; otherwise an existing preview blocks a new one until
+        // it is dismissed.
         if (currentPreview) {{
             if (ENABLE_PERSISTENT_PREVIEW && currentCardElement !== element) {{
                 hidePreview();
@@ -2147,6 +2169,7 @@ public class HoverTrailerController : ControllerBase
         const abortController = new AbortController();
         if (currentAbortController) {{ currentAbortController.abort(); }}
         currentAbortController = abortController;
+        previewPending = true; // intended fetch in flight (cleared on resolve/reject/hide)
 
         log('Showing preview for item:', itemId);
 
@@ -2167,6 +2190,9 @@ public class HoverTrailerController : ControllerBase
             .then(trailerInfo => {{
                 // Hide loading toast when trailer info received
                 hideToast();
+                // Fetch resolved: from here the lock holds via currentPreview
+                // (assigned synchronously below), so release the pending flag.
+                previewPending = false;
 
                 // Check if preview was cancelled during fetch
                 if (myGeneration !== previewGeneration || currentPreview || isPlaying) {{
@@ -2394,6 +2420,7 @@ public class HoverTrailerController : ControllerBase
                 log('Preview created for:', trailerInfo.Name);
             }})
             .catch(error => {{
+                previewPending = false; // fetch settled (aborted or failed)
                 if (error.name === 'AbortError') return;
                 log('Error loading trailer:', error);
                 if (error.message === 'NO_TRAILER') {{
@@ -2407,6 +2434,7 @@ public class HoverTrailerController : ControllerBase
     function hidePreview() {{
         // Invalidate any in-flight fetch and abort it
         previewGeneration++;
+        previewPending = false; // release the issue-#23 lock on dismiss
         htInteracting = false; // clear any stuck drag/resize state (#20)
         if (currentAbortController) {{
             currentAbortController.abort();
@@ -2526,7 +2554,8 @@ public class HoverTrailerController : ControllerBase
                 hideProgressIndicator(card);
                 // In persistent mode, any mouseleave keeps the existing preview
                 // alive — even on a different card the user briefly hovered
-                // before reaching HOVER_DELAY. Dismissal is click/Escape/swap.
+                // before reaching HOVER_DELAY. Dismissal is click/Escape (and,
+                // when the issue-#23 lock is off, hover-swap to another card).
                 if (ENABLE_PERSISTENT_PREVIEW && currentPreview) {{
                     return;
                 }}
