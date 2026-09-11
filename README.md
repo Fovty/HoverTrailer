@@ -87,6 +87,15 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 - **Persistent preview** — keep playing after the cursor leaves the card; dismiss with click or Escape. By default a playing trailer is **not** replaced when the cursor passes over other cards (so you don't accidentally switch trailers); turn off **"Don't replace a playing trailer"** to restore hover-to-swap.
 - **Focus trigger** — keyboard/D-pad focus on a card triggers the preview (for Jellyfin Web in a TV browser or with spatial-navigation overlays). Mouse clicks don't re-trigger.
 
+## Requirements
+
+| Jellyfin server | HoverTrailer release | Plugin runtime |
+|-----------------|----------------------|----------------|
+| 12.0 and newer  | 0.4.0.0 and newer    | .NET 10        |
+| 10.11.x         | 0.3.1.0 (final 10.11 build) | .NET 9  |
+
+Jellyfin 12 changed plugin ABI (`BaseItem.GetExtras` gained a parameter) and moved to .NET 10, so builds made for 10.11 fail on 12 with a `MissingMethodException` (see [#24](https://github.com/Fovty/HoverTrailer/issues/24)). The plugin catalog picks the newest release whose `targetAbi` matches your server, so both server lines keep working from the same manifest URL. Only the 12.x line receives new features.
+
 ## Installation
 
 ### From Jellyfin Plugin Catalog (Recommended)
@@ -154,6 +163,8 @@ volumes:
 </details>
 
 ## Development
+
+Requires the .NET 10 SDK (the project targets `net10.0` against `Jellyfin.Controller` 12.0.0).
 
 ```bash
 git clone https://github.com/Fovty/HoverTrailer.git
