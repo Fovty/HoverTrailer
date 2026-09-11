@@ -67,7 +67,7 @@ https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
 - Netflix-style hover preview with configurable delay
 - Multi-source trailer detection with a fixed priority — **local trailer file → remote YouTube → theme-video fallback** (first match wins; theme-video fallback is optional)
 - Audio on/off with adjustable volume; the volume and mute you set on the player are **remembered per device** (muted during autoplay until the page has user activation — browser policy)
-- Interactive control bar (play/pause, seek, volume, mute, fullscreen) on **both YouTube and local** trailer previews (requires Persistent preview; the seek bar hides automatically when a local stream reports no duration)
+- Interactive control bar (play/pause, seek, volume, mute, fullscreen) on **both YouTube and local** trailer previews (requires Persistent preview). Local trailers the browser can decode natively (H.264/VP9/AV1 video with AAC/MP3/Opus/Vorbis/FLAC audio in MP4, WebM or MKV) are served as-is and are fully seekable; anything else (e.g. AC3/DTS audio, HEVC) goes through Jellyfin's remux so it still plays, but that stream cannot seek, so the seek bar is hidden for it
 - Hover progress indicator on the card during the delay
 
 **Positioning modes**

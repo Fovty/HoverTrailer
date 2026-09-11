@@ -203,6 +203,7 @@ public class HoverTrailerController : ControllerBase
                     IsRemote = false,
                     Source = "Local File"
                 };
+                ApplyMediaInfo(trailerInfo, localTrailer);
 
                 LoggingHelper.LogDebug(_logger, "Successfully created local trailer info for item: {ItemName} (ID: {ItemId})",
                     item.Name, itemId);
@@ -255,6 +256,7 @@ public class HoverTrailerController : ControllerBase
                         IsRemote = false,
                         Source = "Theme Video"
                     };
+                    ApplyMediaInfo(trailerInfo, themeVideo);
                     return Ok(trailerInfo);
                 }
             }
@@ -394,6 +396,39 @@ public class HoverTrailerController : ControllerBase
             LoggingHelper.LogError(_logger, ex, "Unexpected error getting plugin status");
             var error = ErrorResponse.FromException(ex, requestId);
             return StatusCode(500, error);
+        }
+    }
+
+    /// <summary>
+    /// Fills the container/codec fields of a local trailer so the client can decide whether the
+    /// browser can play the file as-is (seekable <c>?static=true</c> stream) or needs the server
+    /// remux (issue #25). Any failure leaves the fields null, which the client treats as "remux".
+    /// </summary>
+    /// <param name="info">The trailer info to fill.</param>
+    /// <param name="media">The local trailer or theme video item.</param>
+    private void ApplyMediaInfo(TrailerInfo info, BaseItem media)
+    {
+        try
+        {
+            var extension = System.IO.Path.GetExtension(media.Path);
+            info.Container = string.IsNullOrEmpty(extension) ? null : extension.TrimStart('.').ToLowerInvariant();
+
+            var streams = media.GetMediaStreams();
+            var video = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+            // Browsers play the container's default audio track; mirror that choice.
+            var audio = streams.FirstOrDefault(s => s.Type == MediaStreamType.Audio && s.IsDefault)
+                ?? streams.FirstOrDefault(s => s.Type == MediaStreamType.Audio);
+
+            info.VideoCodec = video?.Codec?.ToLowerInvariant();
+            info.VideoBitDepth = video?.BitDepth;
+            info.AudioCodec = audio?.Codec?.ToLowerInvariant();
+
+            LoggingHelper.LogDebug(_logger, "Local trailer media info: container={Container}, video={VideoCodec} ({BitDepth}-bit), audio={AudioCodec}",
+                info.Container ?? "?", info.VideoCodec ?? "?", info.VideoBitDepth?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?", info.AudioCodec ?? "?");
+        }
+        catch (Exception ex)
+        {
+            LoggingHelper.LogWarning(_logger, "Could not read media streams for trailer {TrailerId}; client will use the remux stream: {Message}", media.Id, ex.Message);
         }
     }
 
@@ -1367,6 +1402,33 @@ public class HoverTrailerController : ControllerBase
         return container;
     }}
 
+    // ── Direct-play probe for local trailers (#25) ─────────────────────────
+    // Map Jellyfin's container/codec names onto a MIME type plus RFC 6381
+    // codec string and ask the browser whether it can decode that combination.
+    // Returns the type string when it can (→ ?static=true, seekable) or null
+    // when it can't (→ server remux). Names not in the tables map to null on
+    // purpose so anything exotic stays on the remux path, which still works.
+    function htDirectPlayType(info) {{
+        const mimeByContainer = {{ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska' }};
+        // Chromium only answers for the full VP9 string; plain 'vp9' yields ''.
+        const videoRfc = {{ h264: 'avc1.640028', avc: 'avc1.640028', hevc: 'hvc1.1.6.L120.90', h265: 'hvc1.1.6.L120.90', vp8: 'vp8', vp9: 'vp09.00.10.08', av1: 'av01.0.08M.08' }};
+        const audioRfc = {{ aac: 'mp4a.40.2', mp3: 'mp4a.6B', opus: 'opus', vorbis: 'vorbis', flac: 'flac', ac3: 'ac-3', eac3: 'ec-3' }};
+        const container = (info.Container || '').toLowerCase();
+        const vcodec = (info.VideoCodec || '').toLowerCase();
+        const acodec = (info.AudioCodec || '').toLowerCase();
+        const mime = mimeByContainer[container];
+        const v = videoRfc[vcodec];
+        if (!mime || !v) return null;
+        // No browser decodes 10-bit H.264, and canPlayType can't tell.
+        if ((vcodec === 'h264' || vcodec === 'avc') && info.VideoBitDepth > 8) return null;
+        const a = acodec ? audioRfc[acodec] : '';
+        if (acodec && !a) return null;
+        const type = mime + '; codecs=""' + (a ? v + ', ' + a : v) + '""';
+        let verdict = '';
+        try {{ verdict = document.createElement('video').canPlayType(type); }} catch (e) {{ verdict = ''; }}
+        return verdict ? type : null;
+    }}
+
     function createVideoPreview(trailerPath, cardElement) {{
         // Create container div for the video
         const container = document.createElement('div');
@@ -1879,8 +1941,12 @@ public class HoverTrailerController : ControllerBase
             // seek against, so hide the seek bar + time labels — but with
             // visibility:hidden so the seek's flex:1 still spaces the bar
             // (play stays left, volume/fullscreen stay right).
+            // Likewise a stream that reports a duration but no seekable
+            // range (the server remux answers Accept-Ranges: none) would
+            // only let the slider snap back to 0:00 on every click (#25).
             const d = video.duration;
-            const known = !!(d && isFinite(d) && d > 0);
+            const seekableEnd = video.seekable && video.seekable.length ? video.seekable.end(video.seekable.length - 1) : 0;
+            const known = !!(d && isFinite(d) && d > 0 && seekableEnd > 0);
             if (known && parseFloat(seekEl.max) !== d) seekEl.max = d;
             durEl.textContent = known ? fmtTime(d) : '0:00';
             const vis = known ? 'visible' : 'hidden';
@@ -1898,6 +1964,7 @@ public class HoverTrailerController : ControllerBase
         video.addEventListener('pause', syncPlay);
         video.addEventListener('loadedmetadata', syncMeta);
         video.addEventListener('durationchange', syncMeta);
+        video.addEventListener('canplay', syncMeta);
         video.addEventListener('timeupdate', syncTime);
         video.addEventListener('volumechange', syncVol);
         syncMeta();
@@ -2259,8 +2326,24 @@ public class HoverTrailerController : ControllerBase
                         throw new Error('Invalid YouTube URL format');
                     }}
                 }} else {{
-                    // For local trailers, use Jellyfin's stream endpoint
-                    videoSource = `${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`;
+                    // Local trailers and theme videos come from Jellyfin's
+                    // stream endpoint. Without ?static=true the server pipes
+                    // the file through ffmpeg on every hover (video copy,
+                    // audio → AAC) and answers with Accept-Ranges: none, so
+                    // the <video> cannot seek (#25). ?static=true serves the
+                    // file untouched with byte ranges — seekable, no ffmpeg —
+                    // but only makes sense when the browser can decode the
+                    // file's container/codecs itself; otherwise stay on the
+                    // remux, which at least gets AC3/DTS audio playing.
+                    const directType = htDirectPlayType(trailerInfo);
+                    videoSource = `${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream` + (directType ? '?static=true' : '');
+                    if (directType) {{
+                        log('Browser can direct-play local trailer (' + directType + '); using static stream');
+                    }} else {{
+                        log('Browser cannot direct-play local trailer (container=' + (trailerInfo.Container || '?') +
+                            ', video=' + (trailerInfo.VideoCodec || '?') + ', audio=' + (trailerInfo.AudioCodec || '?') +
+                            '); using server remux stream (not seekable)');
+                    }}
                     log('Using Jellyfin stream endpoint for local trailer:', videoSource);
                 }}
 
@@ -2768,6 +2851,27 @@ public class TrailerInfo
     /// Gets or sets a value indicating whether this is a remote trailer.
     /// </summary>
     public bool IsRemote { get; set; }
+
+    /// <summary>
+    /// Gets or sets the file container of a local trailer (extension without the dot, e.g. "mp4", "mkv").
+    /// Null for remote trailers or when unknown.
+    /// </summary>
+    public string? Container { get; set; }
+
+    /// <summary>
+    /// Gets or sets the video codec of a local trailer as reported by Jellyfin (e.g. "h264", "vp9"). Null when unknown.
+    /// </summary>
+    public string? VideoCodec { get; set; }
+
+    /// <summary>
+    /// Gets or sets the video bit depth of a local trailer (8, 10, ...). Null when unknown.
+    /// </summary>
+    public int? VideoBitDepth { get; set; }
+
+    /// <summary>
+    /// Gets or sets the codec of the audio track a player would pick by default (e.g. "aac", "ac3"). Null when unknown or absent.
+    /// </summary>
+    public string? AudioCodec { get; set; }
 
     /// <summary>
     /// Gets or sets the trailer source description.
