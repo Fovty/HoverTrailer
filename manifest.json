@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.4.0.0",
+        "changelog": "- build: target Jellyfin 12 / .NET 10 (#24)",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.4.0.0/HoverTrailer-0.4.0.0-server.zip",
+        "checksum": "aa2bd7a271af9cf159caedb876a5c5d1",
+        "timestamp": "2026-09-11T03:43:46Z"
+      },
+      {
         "version": "0.3.1.0",
         "changelog": "- feat(hover): don't replace a playing trailer on accidental hover (#23)",
         "targetAbi": "10.11.0.0",
