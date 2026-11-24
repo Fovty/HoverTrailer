@@ -363,13 +363,20 @@
                 pluginUniqueId: '82c71cde-a52b-44f1-a18e-d93eb6a35ed0'
             };
 
+            // 0 is a valid value for several fields (hover delay, opacity,
+            // border radius, volume), so `value || default` must not be used
+            // for them: it silently turned a saved 0 back into the default.
+            function htOr(value, fallback) {
+                return (value === null || value === undefined || (typeof value === 'number' && isNaN(value))) ? fallback : value;
+            }
+
             function loadConfiguration() {
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(HoverTrailerConfig.pluginUniqueId).then(function (config) {
                     // Hover Preview Settings
                     document.querySelector('#EnableHoverPreview').checked = config.EnableHoverPreview !== false;
                     document.querySelector('#InjectClientScript').checked = config.InjectClientScript !== false;
-                    document.querySelector('#HoverDelayMs').value = config.HoverDelayMs || 1000;
+                    document.querySelector('#HoverDelayMs').value = htOr(config.HoverDelayMs, 1000);
 
                     // Hover Preview Customization
                     document.querySelector('#PreviewPositioningMode').value = config.PreviewPositioningMode || 'Center';
@@ -381,10 +388,10 @@
                     document.querySelector('#PreviewWidth').value = config.PreviewWidth || 300;
                     document.querySelector('#PreviewHeight').value = config.PreviewHeight || 200;
                     document.querySelector('#PreviewSizePercentage').value = config.PreviewSizePercentage || 100;
-                    document.querySelector('#PreviewOpacity').value = config.PreviewOpacity || 0.9;
-                    document.querySelector('#PreviewBorderRadius').value = config.PreviewBorderRadius || 8;
+                    document.querySelector('#PreviewOpacity').value = htOr(config.PreviewOpacity, 0.9);
+                    document.querySelector('#PreviewBorderRadius').value = htOr(config.PreviewBorderRadius, 8);
                     document.querySelector('#EnablePreviewAudio').checked = config.EnablePreviewAudio || false;
-                    document.querySelector('#PreviewVolume').value = config.PreviewVolume || 50;
+                    document.querySelector('#PreviewVolume').value = htOr(config.PreviewVolume, 50);
                     document.querySelector('#RemoteVideoQuality').value = config.RemoteVideoQuality || 'adaptive';
                     // Background blur mode: migrate legacy EnableBackgroundBlur=true to Full when the new dropdown is unset.
                     const blurMode = config.BackgroundBlurMode && config.BackgroundBlurMode !== 'Off'
@@ -426,7 +433,7 @@
                     // Hover Preview Settings
                     config.EnableHoverPreview = document.querySelector('#EnableHoverPreview').checked;
                     config.InjectClientScript = document.querySelector('#InjectClientScript').checked;
-                    config.HoverDelayMs = parseInt(document.querySelector('#HoverDelayMs').value) || 1000;
+                    config.HoverDelayMs = htOr(parseInt(document.querySelector('#HoverDelayMs').value, 10), 1000);
 
                     // Hover Preview Customization
                     config.PreviewPositioningMode = document.querySelector('#PreviewPositioningMode').value || 'Center';
@@ -439,10 +446,10 @@
                     config.PreviewWidth = parseInt(document.querySelector('#PreviewWidth').value) || 300;
                     config.PreviewHeight = parseInt(document.querySelector('#PreviewHeight').value) || 200;
                     config.PreviewSizePercentage = parseInt(document.querySelector('#PreviewSizePercentage').value) || 100;
-                    config.PreviewOpacity = parseFloat(document.querySelector('#PreviewOpacity').value) || 0.9;
-                    config.PreviewBorderRadius = parseInt(document.querySelector('#PreviewBorderRadius').value) || 8;
+                    config.PreviewOpacity = htOr(parseFloat(document.querySelector('#PreviewOpacity').value), 0.9);
+                    config.PreviewBorderRadius = htOr(parseInt(document.querySelector('#PreviewBorderRadius').value, 10), 8);
                     config.EnablePreviewAudio = document.querySelector('#EnablePreviewAudio').checked;
-                    config.PreviewVolume = parseInt(document.querySelector('#PreviewVolume').value) || 50;
+                    config.PreviewVolume = htOr(parseInt(document.querySelector('#PreviewVolume').value, 10), 50);
                     config.RemoteVideoQuality = document.querySelector('#RemoteVideoQuality').value || 'adaptive';
                     config.BackgroundBlurMode = document.querySelector('#BackgroundBlurMode').value || 'Off';
                     config.BackgroundBlurFalloffRadius = parseInt(document.querySelector('#BackgroundBlurFalloffRadius').value) || 200;

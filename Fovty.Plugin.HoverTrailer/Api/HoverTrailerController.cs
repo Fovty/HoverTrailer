@@ -545,6 +545,7 @@ public class HoverTrailerController : ControllerBase
     // the network window can't slip through and abort the intended fetch.
     let previewPending = false;
     let resizeHandler;
+    let cardWatchTimer = null; // non-persistent mode: polls that the anchor card still exists
     let anchorTrackerRafId = null;
     let anchorScrollHandler = null; // capture-phase scroll listener for AnchorToCard
     let blurHaloScrollHandler = null; // capture-phase scroll listener — translates backdrop to follow preview
@@ -562,6 +563,15 @@ public class HoverTrailerController : ControllerBase
     // resizeHandler sees no fullscreen and tears down the preview. Set
     // this in fullscreenchange and check in resizeHandler.
     let recentFsExit = false;
+
+    // Issue #27: a card is only a valid preview anchor while it is attached
+    // AND rendered. Jellyfin keeps previous pages in the DOM but hidden
+    // (display:none) after navigation, so a stale card is still isConnected
+    // yet has no layout box. Anchoring to it produced an invisible 0x0
+    // preview that kept playing audio behind a full-screen blur.
+    function htCardVisible(card) {{
+        return !!card && card.isConnected && card.getClientRects().length > 0;
+    }}
 
     // Inflate the halo backdrop beyond the viewport so we can translate it
     // freely during scroll without exposing unblurred edges.
@@ -1152,6 +1162,10 @@ public class HoverTrailerController : ControllerBase
         }}
         const backdrop = document.getElementById('hover-trailer-backdrop');
         if (backdrop) {{
+            // Drop the id right away: a preview that appears during the
+            // 300 ms fade-out must build a fresh backdrop instead of reusing
+            // this one, which the timer below is about to remove.
+            backdrop.removeAttribute('id');
             backdrop.style.opacity = '0';
             setTimeout(() => {{
                 if (backdrop.parentNode) {{
@@ -1575,6 +1589,18 @@ public class HoverTrailerController : ControllerBase
             if (e.source !== iframe.contentWindow) return;
             let data;
             try {{ data = JSON.parse(e.data); }} catch (_) {{ return; }}
+            // The player reports unplayable videos (private, removed,
+            // embedding disabled: codes 2/5/100/101/150) as onError. Without
+            // this the preview kept showing YouTube's error page and, with
+            // the issue-#23 lock on, blocked every other card until dismissed.
+            if (data.event === 'onError') {{
+                log('YouTube player error ' + data.info + ', dismissing preview');
+                if (currentPreview && currentPreview.contains(iframe)) {{
+                    hidePreview();
+                    showToast('Trailer unavailable', 'error', 3000);
+                }}
+                return;
+            }}
             if (data.event !== 'infoDelivery' || !data.info) return;
             if (data.info.playerState === 0) {{
                 if (ENABLE_TRAILER_LOOP) {{
@@ -2206,6 +2232,14 @@ public class HoverTrailerController : ControllerBase
     function showPreview(element, itemId) {{
         if (isPlaying) return;
 
+        // Issue #27: the hover/focus timer can outlive the card (navigated
+        // away, page hidden). Never start a preview for a card that is gone.
+        if (!htCardVisible(element)) {{
+            log('Card no longer visible, skipping preview');
+            hideProgressIndicator(element);
+            return;
+        }}
+
         // Issue #23: in persistent mode with the lock on, a trailer that is
         // already playing (currentPreview) OR still loading (previewPending)
         // is never torn down to start another card's trailer. Dwelling over a
@@ -2266,6 +2300,12 @@ public class HoverTrailerController : ControllerBase
                     log('Preview cancelled during fetch');
                     return;
                 }}
+                // Issue #27: the card may have been navigated away while the
+                // TrailerInfo request was in flight.
+                if (!htCardVisible(element)) {{
+                    log('Card hidden during fetch, preview cancelled');
+                    return;
+                }}
 
                 log('Creating video preview for trailer:', trailerInfo.Name);
                 log('Trailer info received:', {{
@@ -2279,6 +2319,8 @@ public class HoverTrailerController : ControllerBase
 
                 // Determine video source based on trailer type
                 let videoSource;
+                let remuxSource = null;      // local trailers: server remux URL (fallback)
+                let usedDirectPlay = false;  // local trailers: videoSource is the ?static=true stream
                 if (trailerInfo.IsRemote) {{
                     // For remote YouTube trailers, convert to embed URL
                     const youtubeUrl = trailerInfo.Path;
@@ -2336,7 +2378,9 @@ public class HoverTrailerController : ControllerBase
                     // file's container/codecs itself; otherwise stay on the
                     // remux, which at least gets AC3/DTS audio playing.
                     const directType = htDirectPlayType(trailerInfo);
-                    videoSource = `${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream` + (directType ? '?static=true' : '');
+                    remuxSource = `${{API_BASE_URL}}/Videos/${{trailerInfo.Id}}/stream`;
+                    usedDirectPlay = !!directType;
+                    videoSource = remuxSource + (directType ? '?static=true' : '');
                     if (directType) {{
                         log('Browser can direct-play local trailer (' + directType + '); using static stream');
                     }} else {{
@@ -2357,6 +2401,44 @@ public class HoverTrailerController : ControllerBase
                 document.body.appendChild(container);
                 currentPreview = container;
                 currentCardElement = element;
+
+                // A local trailer that fails to load never fires loadeddata,
+                // so the container would stay invisible while still counting
+                // as the current preview — and with the issue-#23 lock on it
+                // silently blocked every further hover until the user clicked.
+                // A failed direct-play gets one retry on the server remux;
+                // anything else tears the preview down and says so.
+                if (!trailerInfo.IsRemote) {{
+                    let remuxTried = !usedDirectPlay;
+                    video.addEventListener('error', () => {{
+                        if (currentPreview !== container) return; // hidePreview's own src reset
+                        const code = video.error ? video.error.code : '?';
+                        if (!remuxTried) {{
+                            remuxTried = true;
+                            log('Direct-play of local trailer failed (code ' + code + '), retrying via server remux');
+                            video.src = remuxSource;
+                            video.load();
+                            return;
+                        }}
+                        log('Local trailer failed to load (code ' + code + ')');
+                        hidePreview();
+                        showToast('Error loading trailer', 'error', 3000);
+                    }});
+                }}
+
+                // Non-persistent previews live and die with their card's
+                // mouseleave/focusout. If Jellyfin re-renders or hides the
+                // card underneath (section refresh), those never fire and the
+                // preview would be orphaned, so watch the card (issue #27).
+                if (!ENABLE_PERSISTENT_PREVIEW) {{
+                    clearInterval(cardWatchTimer);
+                    cardWatchTimer = setInterval(() => {{
+                        if (currentPreview === container && !htCardVisible(element)) {{
+                            log('Card disappeared, hiding preview');
+                            hidePreview();
+                        }}
+                    }}, 500);
+                }}
 
                 // AnchorToCard mode: start the rAF loop that keeps the preview
                 // tethered to the card as the user scrolls. Runs for both
@@ -2395,7 +2477,7 @@ public class HoverTrailerController : ControllerBase
                     // For YouTube iframe, show immediately and apply blur
                     log('YouTube iframe loaded, showing preview');
                     setTimeout(() => {{
-                        if (currentPreview) {{
+                        if (currentPreview === container) {{
                             container.style.opacity = PREVIEW_OPACITY;
                             applyBackgroundBlur();
                             log('YouTube preview visible');
@@ -2404,7 +2486,7 @@ public class HoverTrailerController : ControllerBase
                 }} else {{
                     // For local video, wait for loadeddata event
                     video.addEventListener('loadeddata', () => {{
-                        if (!currentPreview) {{
+                        if (currentPreview !== container) {{
                             log('Preview was cancelled before loadeddata');
                             return;
                         }}
@@ -2539,6 +2621,11 @@ public class HoverTrailerController : ControllerBase
         // Remove persistent-preview dismissers if any were installed.
         detachPersistentDismissers();
 
+        if (cardWatchTimer !== null) {{
+            clearInterval(cardWatchTimer);
+            cardWatchTimer = null;
+        }}
+
         // Always hide toast when hiding preview
         hideToast();
 
@@ -2647,6 +2734,10 @@ public class HoverTrailerController : ControllerBase
 
             card.addEventListener('click', () => {{
                 isPlaying = true;
+                // Issue #27: cancel this card's pending hover/focus timer.
+                // Otherwise a delay longer than the isPlaying window below
+                // fires after Jellyfin has navigated to the details page.
+                clearTimeout(hoverTimeout);
                 hideProgressIndicator(card);
                 hidePreview();
                 setTimeout(() => {{ isPlaying = false; }}, 2000);
@@ -2686,6 +2777,34 @@ public class HoverTrailerController : ControllerBase
             console.log(`[HoverTrailer] Attached hover listeners to ${{newCardsCount}} new cards`);
         }}
     }}
+
+    // Issue #27: tear everything down when the user leaves the page or real
+    // playback starts. Covers a pending hover timer, an in-flight fetch and a
+    // visible preview. Without this a preview outlived in-app navigation and
+    // its audio played over the episode the user started.
+    function htTeardownAll(reason) {{
+        clearTimeout(hoverTimeout);
+        document.querySelectorAll('.hovertrailer-progress').forEach(bar => {{
+            hideProgressIndicator(bar.parentElement);
+        }});
+        if (currentPreview || previewPending || document.getElementById('hover-trailer-backdrop')) {{
+            log('Tearing down preview: ' + reason);
+            hidePreview();
+        }}
+    }}
+    // Jellyfin routes via the URL hash; popstate covers history.back().
+    window.addEventListener('hashchange', () => htTeardownAll('navigation'));
+    window.addEventListener('popstate', () => htTeardownAll('navigation'));
+    // Media 'play' does not bubble, but capture-phase listeners on document
+    // still see it. A video outside our preview starting playback (Jellyfin's
+    // player, theme video) wins over the trailer. Audio is left alone so
+    // background music changing tracks doesn't kill a trailer.
+    document.addEventListener('play', (e) => {{
+        const t = e.target;
+        if (!(t instanceof HTMLVideoElement)) return;
+        if (currentPreview && currentPreview.contains(t)) return;
+        htTeardownAll('other media started playing');
+    }}, true);
 
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {{
