@@ -71,45 +71,13 @@ The plugin catalog picks the newest release whose `targetAbi` matches your serve
 
 What changed in each release: [CHANGELOG.md](CHANGELOG.md).
 
-## Features
-
-**Trailer sources**
-
-- The first match wins: local trailer file, then YouTube trailer, then the item's theme video. The theme video fallback is optional.
-- Works on movie and series cards.
-
-**Playback**
-
-- Configurable hover delay, with a progress indicator on the card while it runs.
-- Audio on or off with adjustable volume. The volume and mute state you set on the player are remembered per device.
-- Control bar with play/pause, seek, volume, mute and fullscreen for YouTube and local trailers. It needs Persistent preview.
-- Loop the trailer or stop when it ends.
-- **Persistent preview** keeps the trailer playing after the cursor leaves the card. Click outside the preview or press Escape to close it.
-- **Don't replace a playing trailer** (on by default) stops other cards from swapping the trailer while the cursor passes over them.
-- **Focus trigger** starts the preview on keyboard or D-pad focus, for Jellyfin Web in a TV browser.
-
-**Position**
-
-- **Anchor to Card**: the preview sits on its card and follows it while the page scrolls.
-- **Fix Position**: the preview is pinned to the center or one of the four corners, with an adjustable corner margin. Drag it to move it and drag the corner handle to resize it; position and size are remembered per device. Double-click the move handle to return to the configured spot.
-- **Custom**: the preview is centered on the card with pixel offsets.
-
-**Size and look**
-
-- **Fit to Content** (default) follows the trailer's aspect ratio, scaled by 50 to 1500% and limited to 90% of the viewport. **Manual** sets a fixed width and height.
-- Adjustable opacity and border radius.
-- Background blur: **Off**, **Full** (the whole page), or **Halo** (dense next to the preview and fading out over a configurable radius).
-
-### Seeking in local trailers
-
-Local trailers the browser can decode itself are served as-is and can be seeked: H.264, VP9 or AV1 video with AAC, MP3, Opus, Vorbis or FLAC audio in MP4, WebM or MKV. Anything else, for example HEVC video or AC3/DTS audio, goes through Jellyfin's remux. It still plays, but that stream cannot seek, so the seek bar is hidden for it.
-
 ## Known limitations
 
 - **Touch devices**: hover needs a pointer, so the plugin turns itself off on phones, tablets and other devices that report a touchscreen. This includes laptops with a touchscreen.
 - **Native mobile and TV apps** do not load the web interface, so the plugin has no effect there.
 - **First hover is muted**: browsers block autoplay with sound until you have interacted with the page. Click anywhere once and later previews have audio.
 - **YouTube previews are always 16:9**, because the real aspect ratio of an embedded YouTube video cannot be read.
+- **Seeking in local trailers** works when the browser can play the file itself (H.264, VP9 or AV1 video with AAC, MP3, Opus, Vorbis or FLAC audio). Other files, for example HEVC video or AC3/DTS audio, play through Jellyfin's remux, which cannot seek, so the seek bar is hidden.
 
 ## Troubleshooting
 
