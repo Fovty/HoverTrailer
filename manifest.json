@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",
     "versions": [
       {
+        "version": "0.4.2.0",
+        "changelog": "- Fixed: clicking a card no longer starts its trailer a moment later. With a hover delay above two seconds the trailer used to play invisibly over the details page or the movie, with the page blurred (#27).\n- Fixed: a running or pending preview closes when you navigate to another page or start playing a video.\n- Fixed: a local trailer that fails to load no longer blocks every later preview. Direct play falls back to Jellyfin's remux once, then the preview closes with a message.\n- Fixed: a YouTube trailer that is private, removed or not embeddable closes with \"Trailer unavailable\" instead of leaving YouTube's error page on screen.\n- Fixed: the background blur stays on when one trailer replaces another.\n- Fixed: without Persistent preview, the preview closes when Jellyfin redraws or removes its card.\n- Fixed: the settings page keeps 0 for border radius, volume and opacity instead of resetting it to the default.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/Fovty/HoverTrailer/releases/download/v0.4.2.0/HoverTrailer-0.4.2.0-server.zip",
+        "checksum": "82adf74dc7b62212141b17d206309712",
+        "timestamp": "2026-11-24T22:31:08Z"
+      },
+      {
         "version": "0.4.1.0",
         "changelog": "- fix(local): seekable direct-play for local trailers, remux only when needed (#25)",
         "targetAbi": "12.0.0.0",
