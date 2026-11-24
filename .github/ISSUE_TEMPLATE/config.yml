@@ -1,0 +1,9 @@
+# Blank issues stay available for questions and anything the forms don't fit.
+blank_issues_enabled: true
+contact_links:
+  - name: Jellyfin forum
+    url: https://forum.jellyfin.org/
+    about: General Jellyfin questions that are not about HoverTrailer.
+  - name: Support HoverTrailer (Ko-fi)
+    url: https://ko-fi.com/fovty
+    about: HoverTrailer is free and maintained in spare time. Tips keep it going.

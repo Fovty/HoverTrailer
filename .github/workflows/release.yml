@@ -53,8 +53,29 @@ jobs:
         echo "CHECKSUM=$(md5sum HoverTrailer-${VERSION}-server.zip | cut -d' ' -f1)" >> $GITHUB_ENV
         echo "TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
+    # Preferred source: the "## v<version>" section of CHANGELOG.md. It ends up in
+    # the GitHub release and in the manifest entry the Jellyfin catalog shows.
+    - name: Read release notes from CHANGELOG.md
+      run: |
+        NOTES="$(awk -v heading="## v${VERSION}" '
+          $0 == heading { found = 1; next }
+          found && /^## / { exit }
+          found { print }
+        ' CHANGELOG.md | sed -e 's/[[:space:]]*$//' | sed -e '/./,$!d' | tac | sed -e '/./,$!d' | tac)"
+        if [ -n "$NOTES" ]; then
+          {
+            echo "CHANGELOG_ENTRY<<__HOVERTRAILER_NOTES__"
+            echo "$NOTES"
+            echo "__HOVERTRAILER_NOTES__"
+          } >> "$GITHUB_ENV"
+        else
+          echo "::warning::CHANGELOG.md has no section for v${VERSION}, falling back to the commit list"
+        fi
+
+    # Fallback when CHANGELOG.md has no section for this version.
     - name: Generate Release Notes
       id: release_notes
+      if: env.CHANGELOG_ENTRY == ''
       uses: actions/github-script@v7
       with:
         script: |

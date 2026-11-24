@@ -1,196 +1,178 @@
-# HoverTrailer
+<p align="center">
+  <img src="logo/logo.png" alt="HoverTrailer, a plugin for Jellyfin" width="420">
+</p>
 
-<div align="center">
-    <p>
-        <img alt="HoverTrailer Logo" src="logo/logo.png" width="450"/>
-    </p>
-    <p>
-        Bring your library to life: Instant trailer playback on hover for Jellyfin.
-    </p>
+<p align="center">
+  <b>Trailer previews on hover for Jellyfin.</b><br>
+  Point at a movie or series card and its trailer starts playing, like on Netflix.
+</p>
 
-[![Build](https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml/badge.svg)](https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml)
-[![CodeQL](https://github.com/Fovty/HoverTrailer/actions/workflows/codeql.yml/badge.svg)](https://github.com/Fovty/HoverTrailer/actions/workflows/codeql.yml)
-<a href="https://github.com/Fovty/HoverTrailer/releases">
-<img alt="Total Downloads" src="https://img.shields.io/github/downloads/Fovty/HoverTrailer/total"/>
-</a>
-</div>
+<p align="center">
+  <a href="https://github.com/Fovty/HoverTrailer/releases"><img src="https://img.shields.io/github/v/release/Fovty/HoverTrailer" alt="Release"></a>
+  <a href="#compatibility"><img src="https://img.shields.io/badge/Jellyfin-12.x-00a4dc" alt="Jellyfin 12.x"></a>
+  <a href="https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml"><img src="https://github.com/Fovty/HoverTrailer/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/Fovty/HoverTrailer/releases"><img src="https://img.shields.io/github/downloads/Fovty/HoverTrailer/total" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Fovty/HoverTrailer" alt="License"></a>
+  <a href="https://ko-fi.com/fovty"><img src="https://img.shields.io/badge/Ko--fi-support-ff5e5b?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
+</p>
 
-## Preview
+HoverTrailer adds trailer previews to the Jellyfin web interface. It plays a local trailer file if the item has one, a YouTube trailer otherwise, and can fall back to the theme video. Position, size, background blur and player controls are set on the plugin's settings page.
 
-<div align="center">
+## Demo
+
+<p align="center">
+  <img src="assets/demo.gif" alt="Hovering over cards in a Jellyfin library starts their trailers" width="800">
+</p>
+
 <table>
 <tr>
-<td align="center">
-
-<sub>Configuration 1 - Centered Positioning, Background Blur, Higher Scaling, No Offset</sub>
-
-<img src="assets/preview_centered.png" width="600" alt="Centered Positioning preview"/>
-
-</td>
-<td align="center">
-
-<sub>Configuration 2 - Custom Positioning, No Blur, Lower Scaling, Custom Offset</sub>
-
-<img src="assets/preview_manual.png" width="600" alt="Custom Positioning preview"/>
-
-</td>
+<td align="center"><b>Anchor to Card with Halo blur</b></td>
+<td align="center"><b>Fix Position with player controls</b></td>
+</tr>
+<tr>
+<td><img src="assets/preview_anchor.jpg" alt="Trailer preview anchored to its card, with the neighbouring posters blurred" width="420"></td>
+<td><img src="assets/preview_fix_position.jpg" alt="Trailer preview pinned to a corner, with the control bar and the move and resize handles" width="420"></td>
 </tr>
 </table>
 
+## Install
+
+Requires Jellyfin 12. For Jellyfin 10.11 see [Compatibility](#compatibility).
+
+1. In the Jellyfin dashboard open **Plugins** → **Manage Repositories** and add this repository:
+   ```
+   https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
+   ```
+2. Recommended: install [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) (v2.2.1.0 or newer) first. HoverTrailer detects it and injects its script through it, so no file in Jellyfin's web directory is modified.
+3. Back in **Plugins**, search for **HoverTrailer** and install it.
+4. Restart the Jellyfin server.
+5. Open **Plugins** → **HoverTrailer** to change the settings. Every option has a description next to it.
+
 <details>
-<summary>▶️ <b>Show Preview Videos</b></summary>
-<br/>
+<summary>Manual installation</summary>
 
-**Configuration 1**
-
-<img src="assets/preview_centered.gif" width="700" alt="Centered Positioning animation"/>
-
-**Configuration 2**
-
-<img src="assets/preview_manual.gif" width="700" alt="Custom Positioning animation"/>
+1. Download the zip of the latest [release](https://github.com/Fovty/HoverTrailer/releases).
+2. Extract the `.dll` into a `HoverTrailer` folder in your Jellyfin plugins directory:
+   - **Linux**: `/var/lib/jellyfin/plugins/HoverTrailer`
+   - **Docker**: `/config/plugins/HoverTrailer`
+   - **Windows**: `%ProgramData%\Jellyfin\Server\plugins\HoverTrailer`
+3. Restart the Jellyfin server.
 
 </details>
 
-</div>
-
-## Manifest URL
-
-```
-https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
-```
-
-> **Recommended companion plugin:** install [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) (v2.2.1.0+) first. HoverTrailer auto-detects it and injects the client script through it instead of modifying files on disk.
-
-## Features
-
-**Playback**
-- Netflix-style hover preview with configurable delay
-- Multi-source trailer detection with a fixed priority — **local trailer file → remote YouTube → theme-video fallback** (first match wins; theme-video fallback is optional)
-- Audio on/off with adjustable volume; the volume and mute you set on the player are **remembered per device** (muted during autoplay until the page has user activation — browser policy)
-- Interactive control bar (play/pause, seek, volume, mute, fullscreen) on **both YouTube and local** trailer previews (requires Persistent preview). Local trailers the browser can decode natively (H.264/VP9/AV1 video with AAC/MP3/Opus/Vorbis/FLAC audio in MP4, WebM or MKV) are served as-is and are fully seekable; anything else (e.g. AC3/DTS audio, HEVC) goes through Jellyfin's remux so it still plays, but that stream cannot seek, so the seek bar is hidden for it
-- Hover progress indicator on the card during the delay
-
-**Positioning modes**
-- **Fix Position** — preview is pinned to a fixed, percentage-based spot: **center** or any of the four **corners** (with an adjustable corner margin, so it stays correct across resolutions). In this mode you can also **drag the preview to move it** and **drag the corner handle to resize it** while it plays — the position and size are remembered per device. Double-click the move handle to reset to the configured spot.
-- **Custom** — preview is centered on the card with configurable offsets
-- **Anchor to Card** — preview follows the card as the page scrolls (tethered)
-
-**Sizing**
-- **Fit to Content** (default) — matches the trailer's aspect ratio, scaled by a percentage you choose (50-1500%), clamped to 90% of the viewport
-- **Manual** — fixed width and height in pixels
-- Adjustable opacity and corner radius
-
-**Background blur**
-- **Off** / **Full** (uniform blur over the page) / **Halo** (dense blur right next to the preview, fading out over a configurable radius — hides distracting nearby posters without dimming the whole screen)
-
-**Behavior options**
-- **Persistent preview** — keep playing after the cursor leaves the card; dismiss with click or Escape. By default a playing trailer is **not** replaced when the cursor passes over other cards (so you don't accidentally switch trailers); turn off **"Don't replace a playing trailer"** to restore hover-to-swap.
-- **Focus trigger** — keyboard/D-pad focus on a card triggers the preview (for Jellyfin Web in a TV browser or with spatial-navigation overlays). Mouse clicks don't re-trigger.
-
-## Requirements
+## Compatibility
 
 | Jellyfin server | HoverTrailer release | Plugin runtime |
 |-----------------|----------------------|----------------|
 | 12.0 and newer  | 0.4.0.0 and newer    | .NET 10        |
-| 10.11.x         | 0.3.1.0 (final 10.11 build) | .NET 9  |
+| 10.11.x         | 0.3.1.0 (last build for 10.11) | .NET 9 |
 
-Jellyfin 12 changed plugin ABI (`BaseItem.GetExtras` gained a parameter) and moved to .NET 10, so builds made for 10.11 fail on 12 with a `MissingMethodException` (see [#24](https://github.com/Fovty/HoverTrailer/issues/24)). The plugin catalog picks the newest release whose `targetAbi` matches your server, so both server lines keep working from the same manifest URL. Only the 12.x line receives new features.
+The plugin catalog picks the newest release whose `targetAbi` matches your server, so both server lines use the same repository URL. Only the 12.x line gets new features. Releases built for 10.11 fail on Jellyfin 12 with a `MissingMethodException`, because Jellyfin 12 changed the plugin ABI and moved to .NET 10 ([#24](https://github.com/Fovty/HoverTrailer/issues/24)).
 
-## Installation
+What changed in each release: [CHANGELOG.md](CHANGELOG.md).
 
-### From Jellyfin Plugin Catalog (Recommended)
-1. Open **Jellyfin Admin Dashboard**
-2. Navigate to **Plugins** → **Manage Repositories**
-3. Click **+ (Add)** to add a new repository
-4. Enter the **Manifest URL**:
-   ```
-   https://raw.githubusercontent.com/Fovty/HoverTrailer/master/manifest.json
-   ```
-5. Click **Save**
-6. Navigate back to **Plugins**
-7. Search for **"HoverTrailer"**
-8. Click **Install**
-9. **Restart Jellyfin server** to activate the plugin
-10. Open **Plugins** → **HoverTrailer** → **Settings** to configure (every option has an inline description)
+## Features
 
-### Manual Installation
-1. Download the latest release from [GitHub Releases](../../releases)
-2. Extract the `.dll` file to your Jellyfin plugins directory:
-   - **Windows**: `%ProgramData%\Jellyfin\Server\plugins\HoverTrailer`
-   - **Linux**: `/var/lib/jellyfin/plugins/HoverTrailer`
-   - **Docker**: `/config/plugins/HoverTrailer`
-3. Restart Jellyfin server
+**Trailer sources**
+
+- The first match wins: local trailer file, then YouTube trailer, then the item's theme video. The theme video fallback is optional.
+- Works on movie and series cards.
+
+**Playback**
+
+- Configurable hover delay, with a progress indicator on the card while it runs.
+- Audio on or off with adjustable volume. The volume and mute state you set on the player are remembered per device.
+- Control bar with play/pause, seek, volume, mute and fullscreen for YouTube and local trailers. It needs Persistent preview.
+- Loop the trailer or stop when it ends.
+- **Persistent preview** keeps the trailer playing after the cursor leaves the card. Click outside the preview or press Escape to close it.
+- **Don't replace a playing trailer** (on by default) stops other cards from swapping the trailer while the cursor passes over them.
+- **Focus trigger** starts the preview on keyboard or D-pad focus, for Jellyfin Web in a TV browser.
+
+**Position**
+
+- **Anchor to Card**: the preview sits on its card and follows it while the page scrolls.
+- **Fix Position**: the preview is pinned to the center or one of the four corners, with an adjustable corner margin. Drag it to move it and drag the corner handle to resize it; position and size are remembered per device. Double-click the move handle to return to the configured spot.
+- **Custom**: the preview is centered on the card with pixel offsets.
+
+**Size and look**
+
+- **Fit to Content** (default) follows the trailer's aspect ratio, scaled by 50 to 1500% and limited to 90% of the viewport. **Manual** sets a fixed width and height.
+- Adjustable opacity and border radius.
+- Background blur: **Off**, **Full** (the whole page), or **Halo** (dense next to the preview and fading out over a configurable radius).
+
+### Seeking in local trailers
+
+Local trailers the browser can decode itself are served as-is and can be seeked: H.264, VP9 or AV1 video with AAC, MP3, Opus, Vorbis or FLAC audio in MP4, WebM or MKV. Anything else, for example HEVC video or AC3/DTS audio, goes through Jellyfin's remux. It still plays, but that stream cannot seek, so the seek bar is hidden for it.
 
 ## Known limitations
 
-- **Touch devices**: hover is a pointer-only gesture, so the plugin disables itself on phones and tablets (UA sniff + `(hover: none)`).
-- **Native mobile / TV apps**: Jellyfin's native mobile and smart-TV apps don't load the web frontend, so the plugin has no effect there. Focus Trigger covers the Jellyfin-Web-in-a-TV-browser case.
-- **If audio is enabled**, the first hover after a fresh page load still plays **muted**. Chrome and Safari block unmuted autoplay until you interact with the page once — click anywhere and all subsequent hovers have audio.
-- **YouTube iframe aspect ratio** is hardcoded to 16:9. The YouTube iframe is cross-origin so the actual video aspect can't be read.
+- **Touch devices**: hover needs a pointer, so the plugin turns itself off on phones, tablets and other devices that report a touchscreen. This includes laptops with a touchscreen.
+- **Native mobile and TV apps** do not load the web interface, so the plugin has no effect there.
+- **First hover is muted**: browsers block autoplay with sound until you have interacted with the page. Click anywhere once and later previews have audio.
+- **YouTube previews are always 16:9**, because the real aspect ratio of an embedded YouTube video cannot be read.
 
 ## Troubleshooting
 
-### Trailers not playing
-1. **Check trailer availability** — confirm the movie has a trailer URL or local trailer file in Jellyfin.
-2. **Enable Debug Logging** and watch the browser console (F12) for `[HoverTrailer]` lines.
-3. **Audio**: if you expect sound on the first hover, click anywhere in Jellyfin once to grant the page user activation.
+**No preview appears**
 
-### Preview not showing
-1. Confirm the plugin appears in the Jellyfin admin panel and is enabled.
-2. **Hard reload** the page (Ctrl+Shift+R / Cmd+Shift+R) — the client script is cached by the browser.
-3. Make sure you're on a desktop browser (phones and tablets skip the plugin by design).
+1. Check that the plugin is listed and enabled in the dashboard, and that the server was restarted after installing.
+2. Hard reload the page (Ctrl+Shift+R, or Cmd+Shift+R on macOS). The browser caches the client script.
+3. Use a desktop browser. Touch devices are skipped on purpose.
 
-### Docker permission issues
-If you see `Access to the path '/usr/share/jellyfin/web/index.html' is denied`, install the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin (see the recommendation under [Manifest URL](#manifest-url)) — HoverTrailer will detect it and stop touching the web directory.
+**A trailer does not play**
+
+1. Check that the item has a trailer in Jellyfin: a local trailer file or a trailer URL in its metadata.
+2. Turn on **Enable Debug Mode** in the plugin settings, reload, and look for `[HoverTrailer]` lines in the browser console (F12).
+3. YouTube sometimes refuses to play behind a VPN. Local trailer files avoid that; Jellyfin's [naming rules for extras](https://jellyfin.org/docs/general/server/media/movies/#extras) apply, for example `Movie Name (2020)-trailer.mp4`.
+
+**`Access to the path '/usr/share/jellyfin/web/index.html' is denied`**
+
+Install the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin. HoverTrailer then stops touching the web directory.
 
 <details>
-<summary>Manual alternatives if you can't use File Transformation</summary>
+<summary>Alternatives if you cannot use File Transformation</summary>
 
-**Fix file permissions:**
+Fix the file permissions:
+
 ```bash
 docker exec -it jellyfin find / -name index.html
 docker exec -it --user root jellyfin chown jellyfin:jellyfin /jellyfin/jellyfin-web/index.html
 docker restart jellyfin
 ```
 
-**Or bind-mount the file:**
+Or bind-mount the file:
+
 ```bash
 docker cp jellyfin:/jellyfin/jellyfin-web/index.html /path/to/jellyfin/config/index.html
 # then in docker-compose.yml:
 volumes:
   - /path/to/jellyfin/config/index.html:/jellyfin/jellyfin-web/index.html
 ```
+
 </details>
 
-## Development
+## Build from source
 
-Requires the .NET 10 SDK (the project targets `net10.0` against `Jellyfin.Controller` 12.0.0).
+Requires the .NET 10 SDK.
 
 ```bash
 git clone https://github.com/Fovty/HoverTrailer.git
-cd hovertrailer
-# StyleCop warnings are treated as errors in CI; suppress locally:
+cd HoverTrailer
 dotnet build --configuration Release --property:TreatWarningsAsErrors=false
 ```
 
-Contributions welcome — fork, branch, PR. Match the existing code style, update docs alongside any configuration change, and test across browsers / Jellyfin versions.
+The switch is needed because the project treats analyzer warnings as errors and does not build clean without it. The plugin is `Fovty.Plugin.HoverTrailer/bin/Release/net10.0/Fovty.Plugin.HoverTrailer.dll`.
+
+## Contributing
+
+Bug reports and ideas are welcome in the [issues](https://github.com/Fovty/HoverTrailer/issues); the bug form asks for the details that are usually needed. Pull requests are welcome too. If HoverTrailer is useful to you, a coffee on [Ko-fi](https://ko-fi.com/fovty) helps keep it maintained.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT, see [LICENSE](LICENSE).
 
-## Acknowledgments
+## Credits
 
-- **Jellyfin Team** - For the excellent media server platform
-- **IntroSkipper Plugin** - Architecture and CI/CD inspiration
-- **Jellyscrub Plugin** - Configuration UI patterns
+Built for [Jellyfin](https://jellyfin.org). The plugin structure and release workflow follow [Intro Skipper](https://github.com/intro-skipper/intro-skipper), the settings page follows [Jellyscrub](https://github.com/nicknsy/jellyscrub). The films in the demo are open movies by the [Blender Studio](https://studio.blender.org/films/) (CC BY).
 
-## Support
-
-- **Issues**: [GitHub Issues](../../issues)
-- **Discussions**: [GitHub Discussions](../../discussions)
-- **Jellyfin Community**: [Official Jellyfin Forums](https://forum.jellyfin.org/)
-
----
-
-**Note**: This plugin is not officially affiliated with Jellyfin or Netflix. It's a community-developed enhancement for the Jellyfin media server.
+HoverTrailer is a community plugin and is not affiliated with Jellyfin or Netflix.

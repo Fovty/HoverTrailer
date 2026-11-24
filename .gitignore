@@ -6,18 +6,13 @@ publish/
 
 # IDEs
 .vs/
-.vscode/settings.json
-.vscode/launch.json
-.vscode/tasks.json
+.vscode/
 .idea/
 
 # Sensitive files
 .env
 .env.*
 !.env.template
-.vscode/.env
-.vscode/.env.*
-!.vscode/.env.template
 
 # Temporary files
 base-plan.md

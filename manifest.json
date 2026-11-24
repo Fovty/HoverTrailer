@@ -2,8 +2,8 @@
   {
     "guid": "82c71cde-a52b-44f1-a18e-d93eb6a35ed0",
     "name": "HoverTrailer",
-    "description": "Netflix-style hover trailer previews for movies in Jellyfin",
-    "overview": "A modern plugin that displays movie trailers when hovering over movie cards, providing a Netflix-style preview experience with customizable positioning, sizing, and visual effects.",
+    "description": "Netflix-style trailer previews on hover for movies and series in Jellyfin",
+    "overview": "Plays the trailer of a movie or series when you hover over its card. Local trailer files and YouTube trailers are supported, with configurable position, size, background blur and player controls.",
     "owner": "Fovty",
     "category": "General",
     "imageUrl": "https://raw.githubusercontent.com/Fovty/HoverTrailer/refs/heads/master/logo/logo.png",

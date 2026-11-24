@@ -392,7 +392,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => Guid.Parse("82c71cde-a52b-44f1-a18e-d93eb6a35ed0");
 
     /// <inheritdoc />
-    public override string Description => "Provides hover trailer preview functionality for movies in your Jellyfin library.";
+    public override string Description => "Plays trailer previews when you hover over movie and series cards in your Jellyfin library.";
 
     /// <summary>
     /// Gets the current plugin instance.

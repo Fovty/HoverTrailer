@@ -10,7 +10,7 @@
 
     <!-- Assembly Information -->
     <Title>HoverTrailer Plugin for Jellyfin</Title>
-    <Description>Netflix-style hover trailer previews for movies in Jellyfin</Description>
+    <Description>Netflix-style trailer previews on hover for movies and series in Jellyfin</Description>
     <Authors>Fovty</Authors>
     <Company>HoverTrailer Plugin</Company>
     <Copyright>Copyright © 2025 HoverTrailer Contributors</Copyright>

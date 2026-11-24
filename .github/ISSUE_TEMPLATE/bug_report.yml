@@ -1,0 +1,103 @@
+name: Bug report
+description: A trailer does not play, plays at the wrong moment, or the preview looks or behaves wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Most HoverTrailer bugs depend on the client and on a few settings, so the fields below save a round of questions. Please check the [open issues](https://github.com/Fovty/HoverTrailer/issues) and the [troubleshooting section](https://github.com/Fovty/HoverTrailer#troubleshooting) first.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: HoverTrailer version
+      description: Dashboard → Plugins → HoverTrailer.
+      placeholder: "0.4.2.0"
+    validations:
+      required: true
+  - type: input
+    id: jellyfin-version
+    attributes:
+      label: Jellyfin server version
+      description: Dashboard → General, and how the server runs (Docker, Linux package, Windows, …).
+      placeholder: "12.1.0, Docker"
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      description: Where you see the problem.
+      options:
+        - Chrome / Chromium / Edge / Brave
+        - Firefox
+        - Safari
+        - Jellyfin Media Player / Jellyfin Desktop
+        - TV browser or other
+    validations:
+      required: true
+  - type: input
+    id: client-details
+    attributes:
+      label: Client version and operating system
+      placeholder: "Firefox 145 on Windows 11"
+  - type: dropdown
+    id: file-transformation
+    attributes:
+      label: Is the File Transformation plugin installed?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: trailer-source
+    attributes:
+      label: Which trailers are affected?
+      options:
+        - Local trailer files
+        - YouTube trailers
+        - Theme video fallback
+        - All of them
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: HoverTrailer settings
+      description: >
+        The values that differ from the defaults. Hover delay, Persistent
+        preview, "Don't replace a playing trailer", positioning mode and
+        background blur matter most. A screenshot of the settings page works too.
+      placeholder: |
+        Hover delay: 3000 ms
+        Persistent preview: off
+        Positioning: Anchor to Card
+        Background blur: Full
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Screenshots or a short recording help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the home page
+        2. Hover a series card for two seconds
+        3. …
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console log
+      description: >
+        Turn on **Enable Debug Mode** in the HoverTrailer settings, reload
+        the page, reproduce the problem, then open the browser console (F12)
+        and paste the lines that start with `[HoverTrailer]`, plus any errors.
+      render: text
